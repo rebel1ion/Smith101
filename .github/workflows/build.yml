@@ -13,18 +13,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: brew install ldid dpkg
+
       - name: Setup Theos
-        uses: theos/theos-action@v1
-        with:
-          toolchain: swift
+        env:
+          THEOS: ${{ github.workspace }}/theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          curl -L https://github.com/theos/sdks/releases/download/2024-06-07/iPhoneOS16.5.sdk.tar.xz -o /tmp/sdk.tar.xz
+          tar -xf /tmp/sdk.tar.xz -C $THEOS/sdks/
 
       - name: Build
+        env:
+          THEOS: ${{ github.workspace }}/theos
         run: make package FINALPACKAGE=1
 
-      - name: Upload dylib
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: Smith101-arm64e
-          path: |
-            packages/*.deb
-            .theos/obj/debug/Smith101.dylib
+          path: packages/*.deb

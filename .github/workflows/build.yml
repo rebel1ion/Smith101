@@ -1,0 +1,30 @@
+name: Build Smith101 (arm64e)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos
+        uses: theos/theos-action@v1
+        with:
+          toolchain: swift
+
+      - name: Build
+        run: make package FINALPACKAGE=1
+
+      - name: Upload dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: Smith101-arm64e
+          path: |
+            packages/*.deb
+            .theos/obj/debug/Smith101.dylib

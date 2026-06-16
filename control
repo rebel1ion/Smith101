@@ -1,0 +1,9 @@
+Package: com.icraze.rebellionxx
+Name: rebellionXx
+Version: 1.0
+Architecture: iphoneos-arm
+Description: rebellionXx Tweak
+Maintainer: AlNader
+Author: AlNader
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 13.0)

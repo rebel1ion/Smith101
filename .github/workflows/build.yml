@@ -21,8 +21,9 @@ jobs:
           THEOS: ${{ github.workspace }}/theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $THEOS
-          curl -L https://github.com/theos/sdks/releases/download/2024-06-07/iPhoneOS16.5.sdk.tar.xz -o /tmp/sdk.tar.xz
-          tar -xf /tmp/sdk.tar.xz -C $THEOS/sdks/
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          SDK_VERSION=$(xcrun --sdk iphoneos --show-sdk-version)
+          ln -sf "$SDK_PATH" "$THEOS/sdks/iPhoneOS${SDK_VERSION}.sdk"
 
       - name: Build
         env:

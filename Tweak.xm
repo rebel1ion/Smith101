@@ -227,8 +227,7 @@ static void hideDecorativeViews(UIWindow *win) {
     static NSArray *clsNames = nil;
     if (!clsNames) clsNames = @[@"YallaLite.LTGiftTrack",
                                  @"YallaLite.LTBroadcastTrack",
-                                 @"YallaLite.LTXibView",
-                                 @"YallaLite.LTLiveBackdrop"];
+                                 @"YallaLite.LTXibView"];
     for (NSString *name in clsNames) {
         Class cls = NSClassFromString(name);
         if (!cls) continue;

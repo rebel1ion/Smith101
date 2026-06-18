@@ -612,12 +612,44 @@ static NSArray *_collectViews(UIView *root, Class cls) {
     return out;
 }
 
+static Class _findMikeClass(void) {
+    static Class cached = nil;
+    if (cached) return cached;
+    NSArray *known = @[@"YallaLite_LTMikeElement", @"LTMikeElement",
+                       @"YallaLite_LTLiveMikeFace", @"LTLiveMikeFace",
+                       @"YallaLite_LTMikeSeatView", @"LTMikeSeatView",
+                       @"YallaLite_LTMikeView",     @"LTMikeView"];
+    for (NSString *name in known) {
+        Class cls = NSClassFromString(name);
+        if (cls) { cached = cls; return cls; }
+    }
+    unsigned int count = 0;
+    const char *img = [[[NSBundle mainBundle] executablePath] UTF8String];
+    const char **names = objc_copyClassNamesForImage(img, &count);
+    if (names) {
+        for (unsigned int pass = 0; pass < 2; pass++) {
+            for (unsigned int i = 0; i < count; i++) {
+                NSString *n = @(names[i]);
+                NSString *lower = n.lowercaseString;
+                BOOL match = pass == 0
+                    ? ([lower containsString:@"mike"] && [lower containsString:@"element"])
+                    : [lower containsString:@"mike"];
+                if (match) {
+                    Class cls = NSClassFromString(n);
+                    if (cls && [cls isSubclassOfClass:[UIView class]]) {
+                        cached = cls; free((void*)names); return cls;
+                    }
+                }
+            }
+        }
+        free((void*)names);
+    }
+    return nil;
+}
+
 static NSArray *_sortedMikes(void) {
     NSMutableArray *mikes = [NSMutableArray array];
-    Class cls = NSClassFromString(@"YallaLite_LTMikeElement");
-    if (!cls) cls = NSClassFromString(@"LTMikeElement");
-    if (!cls) cls = NSClassFromString(@"YallaLite_LTLiveMikeFace");
-    if (!cls) cls = NSClassFromString(@"LTLiveMikeFace");
+    Class cls = _findMikeClass();
     if (!cls) return mikes;
 
     NSArray *allWindows = nil;

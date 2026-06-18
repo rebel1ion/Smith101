@@ -91,32 +91,41 @@ static BOOL isHideableText(NSString *t) {
 }
 
 static void hideLocked(UIView *root) {
-    NSArray *subs = nil;
-    @try { subs = [root.subviews copy]; } @catch (NSException *e) { return; }
-    for (UIView *v in subs) {
+    NSMutableArray *stack = [NSMutableArray arrayWithObject:root];
+    NSMutableSet   *seen  = [NSMutableSet set];
+    while (stack.count > 0) {
+        UIView *v = stack.lastObject; [stack removeLastObject];
+        if ([seen containsObject:v]) continue;
+        [seen addObject:v];
         NSString *t = nil;
         if ([v isKindOfClass:[UILabel class]])    t = [(UILabel *)v text];
         if ([v isKindOfClass:[UITextView class]]) t = [(UITextView *)v text];
         if (isHideableText(t)) {
-            v.hidden = YES;
-            v.alpha  = 0;
+            v.hidden = YES; v.alpha = 0;
             if (v.superview) { v.superview.hidden = YES; v.superview.alpha = 0; }
         }
-        hideLocked(v);
+        NSArray *subs = nil;
+        @try { subs = [v.subviews copy]; } @catch (NSException *e) {}
+        for (UIView *s in subs) [stack addObject:s];
     }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 static NSArray *collectViews(UIView *root, Class cls) {
-    NSMutableArray *r = [NSMutableArray array];
-    NSArray *subs = nil;
-    @try { subs = [root.subviews copy]; } @catch (NSException *e) { return r; }
-    for (UIView *s in subs) {
-        if ([s isKindOfClass:cls]) [r addObject:s];
-        [r addObjectsFromArray:collectViews(s, cls)];
+    NSMutableArray *result = [NSMutableArray array];
+    NSMutableArray *stack  = [NSMutableArray arrayWithObject:root];
+    NSMutableSet   *seen   = [NSMutableSet set];
+    while (stack.count > 0) {
+        UIView *v = stack.lastObject; [stack removeLastObject];
+        if ([seen containsObject:v]) continue;
+        [seen addObject:v];
+        if ([v isKindOfClass:cls]) [result addObject:v];
+        NSArray *subs = nil;
+        @try { subs = [v.subviews copy]; } @catch (NSException *e) {}
+        for (UIView *s in subs) [stack addObject:s];
     }
-    return r;
+    return result;
 }
 
 static NSArray *sortedMikes(void) {
@@ -168,15 +177,21 @@ static NSArray *sortedMikes(void) {
     return all;
 }
 
-static BOOL tapControlInView(UIView *v) {
-    if ([v isKindOfClass:[UIControl class]]) {
-        [(UIControl *)v sendActionsForControlEvents:UIControlEventTouchUpInside];
-        return YES;
+static BOOL tapControlInView(UIView *root) {
+    NSMutableArray *stack = [NSMutableArray arrayWithObject:root];
+    NSMutableSet   *seen  = [NSMutableSet set];
+    while (stack.count > 0) {
+        UIView *v = stack.lastObject; [stack removeLastObject];
+        if ([seen containsObject:v]) continue;
+        [seen addObject:v];
+        if ([v isKindOfClass:[UIControl class]]) {
+            [(UIControl *)v sendActionsForControlEvents:UIControlEventTouchUpInside];
+            return YES;
+        }
+        NSArray *subs = nil;
+        @try { subs = [v.subviews copy]; } @catch (NSException *e) {}
+        for (UIView *s in subs) [stack addObject:s];
     }
-    NSArray *subs = nil;
-    @try { subs = [v.subviews copy]; } @catch (NSException *e) { return NO; }
-    for (UIView *s in subs)
-        if (tapControlInView(s)) return YES;
     return NO;
 }
 

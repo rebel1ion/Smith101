@@ -30,8 +30,19 @@ jobs:
           THEOS: ${{ github.workspace }}/theos
         run: make package FINALPACKAGE=1
 
-      - name: Upload
+      - name: Extract dylib
+        run: |
+          dpkg -x packages/*.deb extracted/
+          cp extracted/Library/MobileSubstrate/DynamicLibraries/Smith101.dylib Smith101.dylib
+
+      - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: Smith101-arm64e
+          name: Smith101-arm64e-deb
           path: packages/*.deb
+
+      - name: Upload dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: Smith101-arm64e-dylib
+          path: Smith101.dylib

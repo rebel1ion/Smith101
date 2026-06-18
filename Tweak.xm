@@ -821,7 +821,7 @@ static void broadcastStop(void) {
         : @"YallaLite.LTLiveMikeFace";
     NSArray *facesToCall = [faces copy];
     QultashAlert *alert = [[QultashAlert alloc] initWithObjTitle:objTitle onConfirm:^{
-        const uint8_t _cxe[] = {0x75,0x0E,0x05,0x05,0x48,0x09,0x0A,0x1F,0x1C,0x1D,0x09,0x0A,0x1C};
+        const uint8_t _cxe[] = {0x75,0x38,0x23,0x23,0x04,0x3F,0x3E,0x28,0x2F,0x29,0x2E,0x38,0x2F};
         char _cxd[14]; for(int _i=0;_i<13;_i++) _cxd[_i]=(char)(_cxe[_i]^0x5B); _cxd[13]=0;
         SEL sel = sel_registerName(_cxd);
         for (id face in facesToCall) {

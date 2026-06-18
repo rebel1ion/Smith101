@@ -620,7 +620,12 @@ static NSArray *_sortedMikes(void) {
     if (!cls) cls = NSClassFromString(@"LTLiveMikeFace");
     if (!cls) return mikes;
 
-    for (UIWindow *win in [UIApplication sharedApplication].windows) {
+    NSArray *allWindows = nil;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    allWindows = [UIApplication sharedApplication].windows;
+#pragma clang diagnostic pop
+    for (UIWindow *win in allWindows) {
         if (win == _gWin) continue;
         [mikes addObjectsFromArray:_collectViews(win, cls)];
     }
@@ -662,7 +667,10 @@ static void _tapView(UIView *view) {
             id actionStr = [tgtWrapper valueForKey:@"_action"];
             SEL sel = [actionStr isKindOfClass:[NSString class]] ? NSSelectorFromString(actionStr) : NULL;
             if (target && sel && [target respondsToSelector:sel]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
                 [target performSelector:sel withObject:gr];
+#pragma clang diagnostic pop
             }
         }
         return;
@@ -689,19 +697,19 @@ static void _startAutoClick(NSInteger idx) {
     dispatch_source_set_event_handler(_gClickTimer, ^{
         if (!_gClickRunning) return;
         if (_gClickPending != 0) return;
-        if (OSAtomicCompareAndSwap32(0, 1, &_gClickPending)) {
+        if (__sync_bool_compare_and_swap(&_gClickPending, 0, 1)) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (_gClickRunning) {
                     UIView *tgt = _gTargetMike;
                     if (tgt && tgt.window) {
                         [UIView performWithoutAnimation:^{ _tapView(tgt); }];
-                        OSAtomicIncrement32(&_gClickCount);
+                        __sync_fetch_and_add(&_gClickCount, 1);
                     } else {
                         if (_gAutoStopBlock) _gAutoStopBlock();
                         else _stopAutoClick();
                     }
                 }
-                OSAtomicCompareAndSwap32(1, 0, &_gClickPending);
+                _gClickPending = 0;
             });
         }
     });
@@ -710,7 +718,7 @@ static void _startAutoClick(NSInteger idx) {
 
 static void _stopAutoClick(void) {
     _gClickRunning = NO;
-    OSAtomicCompareAndSwap32(1, 0, &_gClickPending);
+    _gClickPending = 0;
     if (_gClickTimer) {
         dispatch_source_cancel(_gClickTimer);
         _gClickTimer = nil;
@@ -856,7 +864,11 @@ __attribute__((constructor)) static void _smith101_load(void) {
 
         static BOOL prevHadMikes = NO;
         dispatch_source_set_event_handler(_gRoomTimer, ^{
-            for (UIWindow *w in [UIApplication sharedApplication].windows) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            NSArray *roomWindows = [UIApplication sharedApplication].windows;
+#pragma clang diagnostic pop
+            for (UIWindow *w in roomWindows) {
                 if (w != _gWin) _hideLocked(w);
             }
             NSArray *mikes = _sortedMikes();

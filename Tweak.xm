@@ -768,10 +768,12 @@ static void _hideLocked(UIView *root) {
 }
 
 static BOOL _hudHasHideableText(id hud) {
-    return _isHideableText([hud valueForKeyPath:@"label.text"])
-        || _isHideableText([hud valueForKeyPath:@"detailsLabel.text"])
-        || _isHideableText([hud valueForKey:@"labelText"])
-        || _isHideableText([hud valueForKey:@"detailsLabelText"]);
+    NSString *t1 = nil, *t2 = nil, *t3 = nil, *t4 = nil;
+    @try { t1 = [hud valueForKeyPath:@"label.text"]; } @catch (NSException *e) {}
+    @try { t2 = [hud valueForKeyPath:@"detailsLabel.text"]; } @catch (NSException *e) {}
+    @try { t3 = [hud valueForKey:@"labelText"]; } @catch (NSException *e) {}
+    @try { t4 = [hud valueForKey:@"detailsLabelText"]; } @catch (NSException *e) {}
+    return _isHideableText(t1) || _isHideableText(t2) || _isHideableText(t3) || _isHideableText(t4);
 }
 
 static void _swizzleHUDIfNeeded(void) {

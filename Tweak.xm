@@ -442,13 +442,19 @@ static void broadcastStop(void) {
     ok.layer.shadowRadius = 7; ok.layer.shadowOpacity = 0.5f; ok.layer.shadowOffset = CGSizeZero;
     objc_setAssociatedObject(ok, "cb", cb, OBJC_ASSOCIATION_COPY);
     [ok addTarget:self action:@selector(confirmTapped:) forControlEvents:UIControlEventTouchUpInside];
-    [ok addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:ok];
     return self;
 }
 - (void)confirmTapped:(UIButton *)btn {
     void (^cb)(void) = objc_getAssociatedObject(btn, "cb");
-    if (cb) cb();
+    // اغلق الـ alert أولًا، بعدين نادي الـ method
+    [UIView animateWithDuration:0.18 animations:^{
+        self.alpha = 0;
+        self.transform = CGAffineTransformMakeScale(0.88, 0.88);
+    } completion:^(BOOL done) {
+        [self removeFromSuperview];
+        if (cb) cb();
+    }];
 }
 - (void)dragged:(UIPanGestureRecognizer *)g {
     CGPoint d = [g translationInView:self.superview];

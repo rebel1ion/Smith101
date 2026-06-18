@@ -1,620 +1,214 @@
+#import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <substrate.h>
-#import <CoreFoundation/CoreFoundation.h>
-#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
+#import <stdatomic.h>
+#import <dlfcn.h>
 
-// ── Globals ───────────────────────────────────────────────────────────────────
-static UIWindow          *_gWin          = nil;
-static id                 _gPanel        = nil;
-static UIButton          *_gSWTBtn       = nil;
-static void              (^_gAutoStopBlock)(void) = nil;
-static IMP                _gOrigHUDShow  = NULL;
-static dispatch_source_t  _gRoomTimer    = nil;
-static dispatch_source_t  _gClickTimer   = nil;
-static dispatch_queue_t   _gClickQueue   = nil;
-static UIView __weak     *_gTargetMike   = nil;
-static BOOL               _gClickRunning = NO;
-static NSInteger          _gClickRate    = 500;
-static volatile int32_t   _gClickCount   = 0;
-static volatile int32_t   _gClickPending = 0;
-
-// ── Forward declarations ──────────────────────────────────────────────────────
-static NSArray *_sortedMikes(void);
-static NSArray *_collectViews(UIView *root, Class cls);
-static void     _startAutoClick(NSInteger idx);
-static void     _stopAutoClick(void);
-static void     _tapView(UIView *v);
-static BOOL     _tapControlInView(UIView *v);
-static void     _hideLocked(UIView *v);
-static BOOL     _isHideableText(NSString *s);
-static BOOL     _hudHasHideableText(id hud);
-static void     _swizzleHUDIfNeeded(void);
-static void     _registerBroadcastListeners(void);
-static void     _broadcastStart(NSInteger idx);
-static void     _broadcastStop(void);
-
-// ── QultashAlert ──────────────────────────────────────────────────────────────
-@interface QultashAlert : UIView
-- (instancetype)initWithObjTitle:(NSString *)title onConfirm:(void(^)(void))block;
-- (void)show;
-- (void)dismiss;
-- (void)confirmTapped:(id)sender;
-- (void)dragged:(UIPanGestureRecognizer *)pan;
-@end
-
-@implementation QultashAlert {
-    void(^_confirmBlock)(void);
+// ── Anti-debug: يمنع الـ debugger من الاتصال ──────────────────────────────
+__attribute__((constructor(101)))
+static void _gd(void) {
+    const uint8_t _pe[] = {0x2A,0x2E,0x28,0x3B,0x39,0x3F};
+    char _pd[7]; for(int _i=0;_i<6;_i++) _pd[_i]=(char)(_pe[_i]^0x5A); _pd[6]=0;
+    typedef int(*_pf)(int,int,void*,int);
+    _pf _p = (_pf)dlsym(RTLD_DEFAULT, _pd);
+    if (_p) _p(31, 0, 0, 0);
 }
 
-- (instancetype)initWithObjTitle:(NSString *)title onConfirm:(void(^)(void))block {
-    CGRect screen = [UIScreen mainScreen].bounds;
-    CGFloat w = 270, h = 230;
-    CGRect f = CGRectMake((screen.size.width - w) / 2, (screen.size.height - h) / 2, w, h);
-    self = [super initWithFrame:f];
-    if (!self) return nil;
-    _confirmBlock = [block copy];
-    self.alpha = 0;
-    self.transform = CGAffineTransformMakeScale(0.75, 0.75);
-    self.backgroundColor = [UIColor colorWithRed:0.14 green:0.14 blue:0.18 alpha:0.97];
-    self.layer.cornerRadius = 14;
-    self.layer.masksToBounds = NO;
-    self.layer.borderColor = [UIColor colorWithRed:0.4 green:0.4 blue:1.0 alpha:0.7].CGColor;
-    self.layer.borderWidth = 1.0;
-    self.layer.shadowColor = [UIColor colorWithRed:0.3 green:0.3 blue:1.0 alpha:1.0].CGColor;
-    self.layer.shadowRadius = 18;
-    self.layer.shadowOpacity = 0.12;
-    self.layer.shadowOffset = CGSizeZero;
+// ── Symbol obfuscation: C functions ──────────────────────────────────────
+#define isHideableText          _xF1a2
+#define hideLocked              _xB3c4
+#define collectViews            _xD5e6
+#define sortedMikes             _x7F89
+#define tapControlInView        _xA0b1
+#define tapView                 _x2C3d
+#define hudHasHideableText      _xE4f5
+#define swizzleHUDIfNeeded      _x6A7b
+#define startAutoClick          _x8C9d
+#define stopAutoClick           _x0EfA
+#define broadcastStart          _x1B2c
+#define broadcastStop           _x3D4e
+#define onRemoteStart           _x5F6a
+#define onRemoteStop            _x7B8c
+#define registerBroadcastListeners _x9D0e
+#define smith101_load           _xF1b2
+#define smith101_unload         _x3E4f
+#define hideDecorativeViews     _x4G5h
 
-    // Header
-    UIView *hdr = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 38)];
-    hdr.backgroundColor = [UIColor colorWithRed:0.1 green:0.1 blue:0.14 alpha:1.0];
-    hdr.layer.cornerRadius = 14;
-    hdr.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    [self addSubview:hdr];
+// ── Symbol obfuscation: ObjC classes ─────────────────────────────────────
+#define MicPanel                _Xq1r2
+#define FaelBtn                 _Xs3t4
+#define QultashAlert            _Xu5v6
+#define SWTHelper               _Xw7x8
+#define PassWin                 _Xy9z0
 
-    UILabel *hdrLbl = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, w, 38)];
-    hdrLbl.text = @"Smith101";
-    hdrLbl.textAlignment = NSTextAlignmentCenter;
-    hdrLbl.textColor = [UIColor colorWithRed:0.4 green:0.4 blue:1.0 alpha:0.9];
-    hdrLbl.font = [UIFont boldSystemFontOfSize:14];
-    [hdr addSubview:hdrLbl];
+// ── Symbol obfuscation: ObjC methods (ours only) ──────────────────────────
+#define doStart                 _ma01
+#define doStop                  _mb02
+#define autoStop                _mc03
+#define remoteStart             _md04
+#define remoteStop              _me05
+#define qultashTapped           _mf06
+#define updateMikeCount         _mg07
+#define pick                    _mh08
+#define drag                    _mi09
+#define rateChanged             _mj0A
+#define build                   _mk0B
+#define setRunning              _ml0C
+#define confirmTapped           _mm0D
+#define dismiss                 _mn0E
+#define show                    _mo0F
+#define dragged                 _mp10
+#define tapped                  _mq11
+#define shared                  _mr12
+#define maxX                    _ms13
+// ─────────────────────────────────────────────────────────────────────────
 
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragged:)];
-    [hdr addGestureRecognizer:pan];
+// ─── Hide toast messages ──────────────────────────────────────────────────
 
-    // Title
-    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(14, 46, w - 28, 20)];
-    titleLbl.text = title;
-    titleLbl.textColor = [UIColor colorWithRed:0.3 green:0.7 blue:1.0 alpha:1.0];
-    titleLbl.font = [UIFont systemFontOfSize:12];
-    titleLbl.numberOfLines = 1;
-    titleLbl.adjustsFontSizeToFitWidth = YES;
-    [self addSubview:titleLbl];
-
-    // Divider
-    UIView *div1 = [[UIView alloc] initWithFrame:CGRectMake(14, 70, w - 28, 0.5)];
-    div1.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.12];
-    [self addSubview:div1];
-
-    // Info lines
-    NSArray *lines = @[
-        @"Auto-click for YallaLite",
-        @"Slide to start clicking",
-        @"Pick mike slot (0-9)",
-        @"Rate slider = speed",
-        @"Remote via CFNotification"
-    ];
-    UIColor *lineColors[] = {
-        [UIColor colorWithWhite:0.5 alpha:1.0],
-        [UIColor colorWithRed:0.2 green:0.7 blue:1.0 alpha:1.0],
-        [UIColor colorWithWhite:0.5 alpha:1.0],
-        [UIColor colorWithWhite:0.5 alpha:1.0],
-        [UIColor colorWithRed:0.2 green:0.7 blue:1.0 alpha:1.0],
-    };
-    CGFloat y = 78;
-    for (int i = 0; i < 5; i++) {
-        UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(14, y, w - 28, 16)];
-        l.text = lines[i];
-        l.textColor = lineColors[i];
-        l.font = [UIFont systemFontOfSize:10];
-        [self addSubview:l];
-        y += 18;
-    }
-
-    // Divider
-    UIView *div2 = [[UIView alloc] initWithFrame:CGRectMake(14, y + 2, w - 28, 0.5)];
-    div2.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.12];
-    [self addSubview:div2];
-    y += 10;
-
-    // Buttons
-    CGFloat bw = (w - 32) / 2;
-    UIButton *ok = [UIButton buttonWithType:UIButtonTypeCustom];
-    ok.frame = CGRectMake(14, y, bw, 36);
-    [ok setTitle:@"✓ Confirm" forState:UIControlStateNormal];
-    ok.titleLabel.font = [UIFont boldSystemFontOfSize:12];
-    ok.backgroundColor = [UIColor colorWithRed:0.6 green:0.15 blue:1.0 alpha:1.0];
-    ok.layer.cornerRadius = 18;
-    ok.layer.shadowColor = [UIColor colorWithRed:1.0 green:0 blue:0.7 alpha:1.0].CGColor;
-    ok.layer.shadowRadius = 8;
-    ok.layer.shadowOpacity = 0.15;
-    ok.layer.shadowOffset = CGSizeZero;
-    [ok addTarget:self action:@selector(confirmTapped:) forControlEvents:UIControlEventTouchUpInside];
-    [self addSubview:ok];
-
-    UIButton *cancel = [UIButton buttonWithType:UIButtonTypeCustom];
-    cancel.frame = CGRectMake(14 + bw + 8, y, bw, 36);
-    [cancel setTitle:@"✕ Cancel" forState:UIControlStateNormal];
-    cancel.titleLabel.font = [UIFont boldSystemFontOfSize:12];
-    cancel.backgroundColor = [UIColor colorWithRed:0.18 green:0.18 blue:0.24 alpha:1.0];
-    cancel.layer.cornerRadius = 18;
-    cancel.layer.borderWidth = 0.7;
-    cancel.layer.borderColor = [UIColor colorWithRed:0.4 green:0.4 blue:1.0 alpha:0.5].CGColor;
-    [cancel addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
-    [self addSubview:cancel];
-
-    return self;
+static BOOL isHideableText(NSString *t) {
+    if (!t || t.length == 0) return NO;
+    NSString *low = t.lowercaseString;
+    if ([low containsString:@"mic locked"])           return YES;
+    if ([low containsString:@"locked by owner"])      return YES;
+    if ([low containsString:@"already on mic"])       return YES;
+    if ([low containsString:@"you're already on"])    return YES;
+    if ([low containsString:@"connection lost"])      return YES;
+    if ([low containsString:@"network connection"])   return YES;
+    if ([t containsString:@"مقفل من"])               return YES;
+    if ([t containsString:@"مقفل بواسطة"])           return YES;
+    if ([t containsString:@"مغلق من"])               return YES;
+    if ([t containsString:@"مغلق بواسطة"])           return YES;
+    if ([t containsString:@"بواسطة المالك"])          return YES;
+    if ([t containsString:@"أنت بالفعل"])            return YES;
+    if ([t containsString:@"على المايك"])             return YES;
+    if ([t containsString:@"بالفعل على"])             return YES;
+    if ([t containsString:@"انقطع الاتصال"])          return YES;
+    if ([t containsString:@"فقد الاتصال"])            return YES;
+    if ([t containsString:@"الاتصال بالإنترنت"])      return YES;
+    if ([t containsString:@"يرجى المحاولة"])          return YES;
+    return NO;
 }
 
-- (void)confirmTapped:(id)sender {
-    if (_confirmBlock) _confirmBlock();
-    [self dismiss];
-}
-
-- (void)dragged:(UIPanGestureRecognizer *)pan {
-    CGPoint t = [pan translationInView:self.superview];
-    CGRect f = self.frame;
-    CGRect screen = [UIScreen mainScreen].bounds;
-    f.origin.x = fmax(0, fmin(f.origin.x + t.x, screen.size.width  - f.size.width));
-    f.origin.y = fmax(0, fmin(f.origin.y + t.y, screen.size.height - f.size.height));
-    self.frame = f;
-    [pan setTranslation:CGPointZero inView:self.superview];
-}
-
-- (void)show {
-    self.alpha = 0;
-    self.transform = CGAffineTransformMakeScale(0.75, 0.75);
-    [UIView animateWithDuration:0.25 animations:^{
-        self.alpha = 1;
-        self.transform = CGAffineTransformIdentity;
-    }];
-}
-
-- (void)dismiss {
-    [UIView animateWithDuration:0.2 animations:^{
-        self.alpha = 0;
-        self.transform = CGAffineTransformMakeScale(0.85, 0.85);
-    } completion:^(BOOL fin) {
-        [self removeFromSuperview];
-    }];
-}
-@end
-
-
-// ── FaelBtn ───────────────────────────────────────────────────────────────────
-@interface FaelBtn : UIControl
-@property (nonatomic, copy) void(^onActivate)(void);
-- (CGFloat)maxX;
-- (void)setRunning:(BOOL)running;
-@end
-
-@implementation FaelBtn {
-    UILabel *_lbl;
-    UIView  *_thumb;
-}
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (!self) return nil;
-    self.backgroundColor = [UIColor colorWithRed:0.07 green:0.5 blue:0.95 alpha:1.0];
-    self.layer.cornerRadius = frame.size.height / 2;
-    self.clipsToBounds = YES;
-
-    _lbl = [[UILabel alloc] initWithFrame:self.bounds];
-    _lbl.text = @"▶";
-    _lbl.textColor = [UIColor whiteColor];
-    _lbl.textAlignment = NSTextAlignmentCenter;
-    _lbl.font = [UIFont boldSystemFontOfSize:14];
-    [self addSubview:_lbl];
-
-    CGFloat sz = frame.size.height - 8;
-    _thumb = [[UIView alloc] initWithFrame:CGRectMake(4, 4, sz, sz)];
-    _thumb.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.2];
-    _thumb.layer.cornerRadius = sz / 2;
-    [self addSubview:_thumb];
-    return self;
-}
-
-- (CGFloat)maxX {
-    return self.bounds.size.width - _thumb.bounds.size.width - 4;
-}
-
-- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
-    UITouch *touch = [touches anyObject];
-    CGFloat tx = [touch locationInView:self].x;
-    CGFloat newX = tx - _thumb.bounds.size.width / 2.0;
-    newX = fmax(4, fmin(newX, [self maxX]));
-    CGRect f = _thumb.frame;
-    f.origin.x = newX;
-    _thumb.frame = f;
-    CGFloat span = fmax(1.0, [self maxX] - 4.0);
-    _lbl.alpha = 1.0 - ((newX - 4.0) / span) * 0.5;
-}
-
-- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
-    CGFloat thumbX = _thumb.frame.origin.x;
-    CGFloat span   = fmax(1.0, [self maxX] - 4.0);
-    CGFloat pct    = (thumbX - 4.0) / span;
-    if (pct >= 0.7 && _onActivate) _onActivate();
-    [UIView animateWithDuration:0.3 animations:^{
-        CGRect f = _thumb.frame;
-        f.origin.x = 4;
-        _thumb.frame = f;
-        _lbl.alpha = 1.0;
-    }];
-}
-
-- (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
-    [self touchesEnded:touches withEvent:event];
-}
-
-- (void)setRunning:(BOOL)running {
-    self.userInteractionEnabled = !running;
-    if (running) {
-        self.backgroundColor = [UIColor colorWithRed:0.9 green:0.35 blue:0.1 alpha:1.0];
-        _lbl.text = @"◼";
-        [UIView animateWithDuration:0.3 animations:^{
-            CGRect f = _thumb.frame;
-            f.origin.x = [self maxX];
-            _thumb.frame = f;
-        }];
-    } else {
-        self.backgroundColor = [UIColor colorWithRed:0.07 green:0.5 blue:0.95 alpha:1.0];
-        _lbl.text = @"▶";
-        _lbl.alpha = 1.0;
-        [UIView animateWithDuration:0.3 animations:^{
-            CGRect f = _thumb.frame;
-            f.origin.x = 4;
-            _thumb.frame = f;
-        }];
-    }
-}
-@end
-
-
-// ── MicPanel ──────────────────────────────────────────────────────────────────
-@interface MicPanel : UIView
-- (void)build;
-- (void)updateMikeCount:(NSUInteger)count;
-- (void)rateChanged:(UISlider *)slider;
-- (void)pick:(UIButton *)btn;
-- (void)doStart;
-- (void)doStop;
-- (void)autoStop;
-- (void)remoteStart:(NSInteger)idx;
-- (void)remoteStop;
-- (void)qultashTapped;
-- (void)drag:(UIPanGestureRecognizer *)pan;
-@end
-
-@implementation MicPanel {
-    NSInteger          _sel;
-    UILabel           *_titleMask;
-    dispatch_source_t  _counterTimer;
-    FaelBtn           *_fael;
-    UISlider          *_rateSlider;
-    UILabel           *_rateLabel;
-    UILabel           *_status;
-    NSMutableArray    *_btns;
-}
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (!self) return nil;
-    _sel = -1;
-    self.hidden = YES;
-    [self build];
-    return self;
-}
-
-- (void)build {
-    CGFloat w = self.bounds.size.width;
-
-    // Panel style
-    self.backgroundColor = [UIColor colorWithRed:0.15 green:0.15 blue:0.18 alpha:0.97];
-    self.layer.cornerRadius = 14;
-    self.layer.masksToBounds = NO;
-    self.layer.borderColor = [UIColor colorWithRed:0.35 green:0.35 blue:1.0 alpha:0.85].CGColor;
-    self.layer.borderWidth = 1.0;
-    self.layer.shadowColor = [UIColor colorWithRed:0.2 green:0.2 blue:1.0 alpha:1.0].CGColor;
-    self.layer.shadowRadius = 18;
-    self.layer.shadowOpacity = 0.14;
-    self.layer.shadowOffset = CGSizeMake(0, 4);
-
-    // Header container
-    UIView *hdrBg = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 40)];
-    hdrBg.backgroundColor = [UIColor colorWithRed:0.1 green:0.1 blue:0.14 alpha:1.0];
-    hdrBg.layer.cornerRadius = 14;
-    hdrBg.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    [self addSubview:hdrBg];
-
-    // Gradient shimmer layer
-    UIView *gradView = [[UIView alloc] initWithFrame:hdrBg.bounds];
-    [hdrBg addSubview:gradView];
-
-    CAGradientLayer *grad = [CAGradientLayer layer];
-    grad.frame = CGRectMake(0, 0, w * 3, 40);
-    grad.startPoint = CGPointMake(0, 0.5);
-    grad.endPoint   = CGPointMake(1, 0.5);
-    grad.colors = @[
-        (id)[UIColor colorWithRed:0.35 green:0.1  blue:1.0 alpha:1.0].CGColor,
-        (id)[UIColor colorWithRed:0.1  green:0.7  blue:1.0 alpha:1.0].CGColor,
-        (id)[UIColor colorWithRed:1.0  green:0.15 blue:0.4 alpha:1.0].CGColor,
-        (id)[UIColor colorWithRed:0.35 green:0.1  blue:1.0 alpha:1.0].CGColor,
-        (id)[UIColor colorWithRed:0.1  green:0.7  blue:1.0 alpha:1.0].CGColor,
-        (id)[UIColor colorWithRed:1.0  green:0.15 blue:0.4 alpha:1.0].CGColor,
-        (id)[UIColor colorWithRed:0.35 green:0.1  blue:1.0 alpha:1.0].CGColor,
-    ];
-    [gradView.layer addSublayer:grad];
-
-    CABasicAnimation *anim = [CABasicAnimation animationWithKeyPath:@"transform.translation.x"];
-    anim.fromValue   = @0;
-    anim.toValue     = @(-w);
-    anim.duration    = 2.5;
-    anim.repeatCount = HUGE_VALF;
-    anim.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
-    [grad addAnimation:anim forKey:@"wave"];
-
-    // Title label masked over the gradient
-    _titleMask = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, w, 40)];
-    _titleMask.text          = @"S";
-    _titleMask.textAlignment = NSTextAlignmentCenter;
-    _titleMask.textColor     = [UIColor whiteColor];
-    _titleMask.font          = [UIFont boldSystemFontOfSize:14];
-    gradView.layer.mask = _titleMask.layer;
-
-    // Pan gesture for dragging panel
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(drag:)];
-    [hdrBg addGestureRecognizer:pan];
-
-    // Mike buttons (0-9) in 2 rows of 5
-    _btns = [NSMutableArray array];
-    CGFloat btnSz = 42;
-    CGFloat hGap  = (w - 210.0) / 6.0;
-    for (int i = 0; i < 10; i++) {
-        int col = i % 5;
-        int row = i / 5;
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-        CGFloat bx = hGap + (btnSz + hGap) * col;
-        CGFloat by = (btnSz + 8) * row + 52.0;
-        btn.frame = CGRectMake(bx, by, btnSz, btnSz);
-        [btn setTitle:[NSString stringWithFormat:@"%d", i] forState:UIControlStateNormal];
-        btn.titleLabel.font = [UIFont boldSystemFontOfSize:15];
-        btn.backgroundColor = [UIColor colorWithRed:0.18 green:0.18 blue:0.22 alpha:1.0];
-        btn.layer.cornerRadius = btnSz / 2;
-        btn.tag = i;
-        [btn addTarget:self action:@selector(pick:) forControlEvents:UIControlEventTouchUpInside];
-        [self addSubview:btn];
-        [_btns addObject:btn];
-    }
-
-    // Status label
-    CGFloat statusY = (btnSz + 8) * 2 + 52 + 6;
-    _status = [[UILabel alloc] initWithFrame:CGRectMake(0, statusY, w, 22)];
-    _status.text          = @"--";
-    _status.textAlignment = NSTextAlignmentCenter;
-    _status.textColor     = [UIColor colorWithWhite:0.6 alpha:1.0];
-    _status.font          = [UIFont systemFontOfSize:12];
-    [self addSubview:_status];
-
-    CGFloat afterStatus = CGRectGetMaxY(_status.frame) + 8;
-    CGFloat btnW = (w - 12 - 8 - 12) / 2;
-
-    // Stop button (left)
-    UIButton *stopBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    stopBtn.frame = CGRectMake(12, afterStatus, btnW, 44);
-    [stopBtn setTitle:@"⏹ Stop" forState:UIControlStateNormal];
-    stopBtn.titleLabel.font = [UIFont boldSystemFontOfSize:13];
-    stopBtn.backgroundColor = [UIColor colorWithRed:0.22 green:0.07 blue:0.07 alpha:1.0];
-    stopBtn.layer.cornerRadius = 22;
-    stopBtn.layer.shadowColor  = [UIColor colorWithRed:1.0 green:0 blue:0.5 alpha:1.0].CGColor;
-    stopBtn.layer.shadowRadius = 8;
-    stopBtn.layer.shadowOpacity = 0.15;
-    stopBtn.layer.shadowOffset = CGSizeZero;
-    [stopBtn addTarget:self action:@selector(doStop) forControlEvents:UIControlEventTouchUpInside];
-    [self addSubview:stopBtn];
-
-    // FaelBtn — slide to start (right)
-    FaelBtn *fael = [[FaelBtn alloc] initWithFrame:CGRectMake(btnW + 12 + 8, afterStatus, btnW, 44)];
-    _fael = fael;
-    __weak MicPanel *ws = self;
-    _fael.onActivate = ^{ [ws doStart]; };
-    [self addSubview:_fael];
-
-    // Rate label
-    CGFloat afterFael = CGRectGetMaxY(_fael.frame) + 8;
-    _rateLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, afterFael, w, 18)];
-    _rateLabel.text          = [NSString stringWithFormat:@"Rate: %ld/s", (long)_gClickRate];
-    _rateLabel.textAlignment = NSTextAlignmentCenter;
-    _rateLabel.textColor     = [UIColor colorWithWhite:0.75 alpha:1.0];
-    _rateLabel.font          = [UIFont systemFontOfSize:12];
-    [self addSubview:_rateLabel];
-
-    // Rate slider
-    UISlider *slider = [[UISlider alloc] initWithFrame:CGRectMake(12, afterFael + 22, w - 24, 30)];
-    _rateSlider = slider;
-    slider.minimumValue = 1;
-    slider.maximumValue = 1500;
-    slider.value        = 500;
-    slider.minimumTrackTintColor = [UIColor colorWithRed:0.35 green:0.35 blue:1.0 alpha:1.0];
-    [slider addTarget:self action:@selector(rateChanged:) forControlEvents:UIControlEventValueChanged];
-    [self addSubview:slider];
-
-    // Info / qultash button
-    CGFloat afterSlider = CGRectGetMaxY(slider.frame) + 6;
-    UIButton *infoBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    infoBtn.frame = CGRectMake(12, afterSlider, w - 24, 26);
-    [infoBtn setTitle:@"ℹ Info" forState:UIControlStateNormal];
-    infoBtn.titleLabel.font  = [UIFont boldSystemFontOfSize:11];
-    infoBtn.backgroundColor  = [UIColor colorWithRed:0.14 green:0.14 blue:0.18 alpha:1.0];
-    infoBtn.layer.cornerRadius = 10;
-    infoBtn.layer.borderWidth  = 0.5;
-    infoBtn.layer.borderColor  = [UIColor colorWithRed:0.4 green:0.4 blue:1.0 alpha:0.4].CGColor;
-    infoBtn.layer.shadowColor  = [UIColor colorWithRed:0.4 green:0.0 blue:1.0 alpha:1.0].CGColor;
-    infoBtn.layer.shadowRadius = 6;
-    infoBtn.layer.shadowOpacity = 0.18;
-    infoBtn.layer.shadowOffset  = CGSizeZero;
-    [infoBtn addTarget:self action:@selector(qultashTapped) forControlEvents:UIControlEventTouchUpInside];
-    [self addSubview:infoBtn];
-}
-
-- (void)updateMikeCount:(NSUInteger)count {
-    if (_sel < 0) {
-        _status.text = [NSString stringWithFormat:@"Mikes: %lu", (unsigned long)count];
-    }
-}
-
-- (void)rateChanged:(UISlider *)slider {
-    _gClickRate = (NSInteger)slider.value;
-    _rateLabel.text = [NSString stringWithFormat:@"Rate: %ld/s", (long)_gClickRate];
-    if (_gClickRunning) _startAutoClick(_sel);
-}
-
-- (void)pick:(UIButton *)btn {
-    _sel = btn.tag;
-    for (UIButton *b in _btns) {
-        b.backgroundColor = [UIColor colorWithRed:0.18 green:0.18 blue:0.22 alpha:1.0];
-    }
-    btn.backgroundColor = [UIColor colorWithRed:0.8 green:0.2 blue:1.0 alpha:1.0];
-    _status.text = [NSString stringWithFormat:@"Mike: %ld", (long)_sel];
-}
-
-- (void)doStart {
-    if (_sel < 0) {
-        _status.text = @"Pick a mike first!";
-        return;
-    }
-    NSArray *mikes = _sortedMikes();
-    if ((NSUInteger)_sel >= mikes.count) {
-        _status.text = [NSString stringWithFormat:@"No mike %ld found", (long)_sel];
-        return;
-    }
-    _startAutoClick(_sel);
-    [_fael setRunning:YES];
-    _status.text = [NSString stringWithFormat:@"Clicking #%ld", (long)_sel];
-    _broadcastStart(_sel);
-}
-
-- (void)doStop {
-    _stopAutoClick();
-    [_fael setRunning:NO];
-    _status.text = @"Stopped";
-    _broadcastStop();
-}
-
-- (void)autoStop {
-    _stopAutoClick();
-    [_fael setRunning:NO];
-    _status.text = @"Auto-stopped";
-}
-
-- (void)remoteStart:(NSInteger)idx {
-    if (idx >= 0 && (NSUInteger)idx < _btns.count) {
-        [self pick:_btns[idx]];
-    }
-    if (_gClickRunning) return;
-    NSArray *mikes = _sortedMikes();
-    if ((NSUInteger)idx >= mikes.count) return;
-    _startAutoClick(idx);
-    [_fael setRunning:YES];
-    _status.text = [NSString stringWithFormat:@"Remote #%ld", (long)idx];
-}
-
-- (void)remoteStop {
-    [self autoStop];
-}
-
-- (void)qultashTapped {
-    __weak MicPanel *ws = self;
-    QultashAlert *alert = [[QultashAlert alloc]
-        initWithObjTitle:@"Stop auto-click?"
-               onConfirm:^{ [ws doStop]; }];
-    [self.superview addSubview:alert];
-    [alert show];
-}
-
-- (void)drag:(UIPanGestureRecognizer *)pan {
-    CGPoint t = [pan translationInView:self.superview];
-    CGRect f  = self.frame;
-    CGRect screen = [UIScreen mainScreen].bounds;
-    f.origin.x = fmax(0, fmin(f.origin.x + t.x, screen.size.width  - f.size.width));
-    f.origin.y = fmax(0, fmin(f.origin.y + t.y, screen.size.height - f.size.height));
-    self.frame = f;
-    [pan setTranslation:CGPointZero inView:self.superview];
-}
-
-- (void)dealloc {
-    if (_counterTimer) dispatch_source_cancel(_counterTimer);
-}
-@end
-
-
-// ── SWTHelper ─────────────────────────────────────────────────────────────────
-@interface SWTHelper : NSObject
-+ (instancetype)shared;
-- (void)tapped:(id)sender;
-- (void)dragged:(UIPanGestureRecognizer *)pan;
-@end
-
-@implementation SWTHelper
-+ (instancetype)shared {
-    static SWTHelper *s;
-    static dispatch_once_t t;
-    dispatch_once(&t, ^{ s = [SWTHelper new]; });
-    return s;
-}
-- (void)tapped:(id)sender {
-    [_gPanel setHidden:![_gPanel isHidden]];
-}
-- (void)dragged:(UIPanGestureRecognizer *)pan {
-    UIView *v = pan.view;
-    CGPoint t = [pan translationInView:v.superview];
-    CGRect f  = v.frame;
-    CGRect screen = [UIScreen mainScreen].bounds;
-    f.origin.x = fmax(0, fmin(f.origin.x + t.x, screen.size.width  - f.size.width));
-    f.origin.y = fmax(0, fmin(f.origin.y + t.y, screen.size.height - f.size.height));
-    v.frame = f;
-    [pan setTranslation:CGPointZero inView:v.superview];
-}
-@end
-
-
-// ── PassWin ───────────────────────────────────────────────────────────────────
-@interface PassWin : UIWindow
-@end
-@implementation PassWin
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    UIView *hit = [super hitTest:point withEvent:event];
-    if (hit == self.rootViewController.view) return nil;
-    return hit;
-}
-@end
-
-
-// ── C helpers ─────────────────────────────────────────────────────────────────
-static NSArray *_collectViews(UIView *root, Class cls) {
-    NSMutableArray *out = [NSMutableArray array];
+static void hideLocked(UIView *root) {
     NSArray *subs = nil;
-    @try { subs = [root.subviews copy]; } @catch (NSException *e) { return out; }
+    @try { subs = [root.subviews copy]; } @catch (NSException *e) { return; }
     for (UIView *v in subs) {
-        if ([v isKindOfClass:cls]) [out addObject:v];
-        [out addObjectsFromArray:_collectViews(v, cls)];
+        NSString *t = nil;
+        if ([v isKindOfClass:[UILabel class]])    t = [(UILabel *)v text];
+        if ([v isKindOfClass:[UITextView class]]) t = [(UITextView *)v text];
+        if (isHideableText(t)) {
+            v.hidden = YES;
+            v.alpha  = 0;
+            if (v.superview) { v.superview.hidden = YES; v.superview.alpha = 0; }
+        }
+        hideLocked(v);
     }
-    return out;
 }
 
-static void _hideDecorativeViews(UIWindow *win) {
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+static NSArray *collectViews(UIView *root, Class cls) {
+    NSMutableArray *r = [NSMutableArray array];
+    NSArray *subs = nil;
+    @try { subs = [root.subviews copy]; } @catch (NSException *e) { return r; }
+    for (UIView *s in subs) {
+        if ([s isKindOfClass:cls]) [r addObject:s];
+        [r addObjectsFromArray:collectViews(s, cls)];
+    }
+    return r;
+}
+
+static NSArray *sortedMikes(void) {
+    Class cls = NSClassFromString(@"YallaLite.LTMikeElement")
+             ?: NSClassFromString(@"LTMikeElement")
+             ?: NSClassFromString(@"YallaLite_LTMikeElement")
+             ?: NSClassFromString(@"YallaLite.LTLiveMikeFace")
+             ?: NSClassFromString(@"LTLiveMikeFace");
+    if (!cls) {
+        // Dynamic search in main bundle
+        unsigned int count = 0;
+        const char *img = [[[NSBundle mainBundle] executablePath] UTF8String];
+        const char **names = objc_copyClassNamesForImage(img, &count);
+        if (names) {
+            for (unsigned int pass = 0; pass < 2 && !cls; pass++) {
+                for (unsigned int i = 0; i < count; i++) {
+                    NSString *n = @(names[i]);
+                    NSString *lower = n.lowercaseString;
+                    BOOL match = pass == 0
+                        ? ([lower containsString:@"mike"] && [lower containsString:@"element"])
+                        : [lower containsString:@"mike"];
+                    if (match) {
+                        Class c = NSClassFromString(n);
+                        if (c && [c isSubclassOfClass:[UIView class]]) { cls = c; break; }
+                    }
+                }
+            }
+            free((void*)names);
+        }
+    }
+    if (!cls) return @[];
+    NSMutableArray *all = [NSMutableArray array];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    for (UIWindow *w in UIApplication.sharedApplication.windows)
+        [all addObjectsFromArray:collectViews(w, cls)];
+#pragma clang diagnostic pop
+    BOOL rtl = UIApplication.sharedApplication.userInterfaceLayoutDirection
+               == UIUserInterfaceLayoutDirectionRightToLeft;
+    [all sortUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
+        CGRect ra = [a.superview convertRect:a.frame toView:nil];
+        CGRect rb = [b.superview convertRect:b.frame toView:nil];
+        if (fabs(ra.origin.y - rb.origin.y) > 30)
+            return ra.origin.y < rb.origin.y ? NSOrderedAscending : NSOrderedDescending;
+        return rtl
+            ? (ra.origin.x > rb.origin.x ? NSOrderedAscending : NSOrderedDescending)
+            : (ra.origin.x < rb.origin.x ? NSOrderedAscending : NSOrderedDescending);
+    }];
+    return all;
+}
+
+static BOOL tapControlInView(UIView *v) {
+    if ([v isKindOfClass:[UIControl class]]) {
+        [(UIControl *)v sendActionsForControlEvents:UIControlEventTouchUpInside];
+        return YES;
+    }
+    NSArray *subs = nil;
+    @try { subs = [v.subviews copy]; } @catch (NSException *e) { return NO; }
+    for (UIView *s in subs)
+        if (tapControlInView(s)) return YES;
+    return NO;
+}
+
+static void tapView(UIView *v) {
+    if (!v) return;
+    if (tapControlInView(v)) return;
+    for (UIGestureRecognizer *gr in v.gestureRecognizers) {
+        if (![gr isKindOfClass:[UITapGestureRecognizer class]]) continue;
+        NSArray *targets = nil;
+        @try { targets = [gr valueForKey:@"_targets"]; } @catch (NSException *e) {}
+        for (id ta in targets) {
+            id  target = nil, actVal = nil;
+            @try {
+                target = [ta valueForKey:@"_target"];
+                actVal = [ta valueForKey:@"_action"];
+            } @catch (NSException *e) {}
+            SEL sel = [actVal isKindOfClass:[NSString class]]
+                      ? NSSelectorFromString(actVal) : nil;
+            if (target && sel && [target respondsToSelector:sel]) {
+                #pragma clang diagnostic push
+                #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                [target performSelector:sel withObject:gr];
+                #pragma clang diagnostic pop
+            }
+        }
+        return;
+    }
+}
+
+// ─── Hide decorative views ────────────────────────────────────────────────
+
+static void hideDecorativeViews(UIWindow *win) {
     static NSArray *clsNames = nil;
     if (!clsNames) clsNames = @[@"YallaLite.LTGiftTrack",
                                  @"YallaLite.LTBroadcastTrack",
@@ -624,333 +218,765 @@ static void _hideDecorativeViews(UIWindow *win) {
     for (NSString *name in clsNames) {
         Class cls = NSClassFromString(name);
         if (!cls) continue;
-        for (UIView *v in _collectViews(win, cls)) {
+        for (UIView *v in collectViews(win, cls)) {
             if (!v.hidden) v.hidden = YES;
         }
     }
 }
 
-static Class _findMikeClass(void) {
-    static Class cached = nil;
-    if (cached) return cached;
-    NSArray *known = @[@"YallaLite_LTMikeElement", @"LTMikeElement",
-                       @"YallaLite_LTLiveMikeFace", @"LTLiveMikeFace",
-                       @"YallaLite_LTMikeSeatView", @"LTMikeSeatView",
-                       @"YallaLite_LTMikeView",     @"LTMikeView"];
-    for (NSString *name in known) {
-        Class cls = NSClassFromString(name);
-        if (cls) { cached = cls; return cls; }
-    }
-    unsigned int count = 0;
-    const char *img = [[[NSBundle mainBundle] executablePath] UTF8String];
-    const char **names = objc_copyClassNamesForImage(img, &count);
-    if (names) {
-        for (unsigned int pass = 0; pass < 2; pass++) {
-            for (unsigned int i = 0; i < count; i++) {
-                NSString *n = @(names[i]);
-                NSString *lower = n.lowercaseString;
-                BOOL match = pass == 0
-                    ? ([lower containsString:@"mike"] && [lower containsString:@"element"])
-                    : [lower containsString:@"mike"];
-                if (match) {
-                    Class cls = NSClassFromString(n);
-                    if (cls && [cls isSubclassOfClass:[UIView class]]) {
-                        cached = cls; free((void*)names); return cls;
-                    }
-                }
-            }
-        }
-        free((void*)names);
-    }
-    return nil;
-}
+// ─── MBProgressHUD Hook ───────────────────────────────────────────────────
 
-static NSArray *_sortedMikes(void) {
-    NSMutableArray *mikes = [NSMutableArray array];
-    Class cls = _findMikeClass();
-    if (!cls) return mikes;
+static IMP gOrigHUDShow = NULL;
 
-    NSArray *allWindows = nil;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    allWindows = [UIApplication sharedApplication].windows;
-#pragma clang diagnostic pop
-    for (UIWindow *win in allWindows) {
-        if (win == _gWin) continue;
-        [mikes addObjectsFromArray:_collectViews(win, cls)];
-    }
-
-    BOOL rtl = ([UIApplication sharedApplication].userInterfaceLayoutDirection
-                == UIUserInterfaceLayoutDirectionRightToLeft);
-
-    [mikes sortUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
-        CGRect ra = [a.superview convertRect:a.frame toView:nil];
-        CGRect rb = [b.superview convertRect:b.frame toView:nil];
-        if (fabs(ra.origin.y - rb.origin.y) <= 30.0) {
-            if (rtl) return ra.origin.x > rb.origin.x ? NSOrderedAscending : NSOrderedDescending;
-            else     return ra.origin.x < rb.origin.x ? NSOrderedAscending : NSOrderedDescending;
-        }
-        return ra.origin.y < rb.origin.y ? NSOrderedAscending : NSOrderedDescending;
-    }];
-    return mikes;
-}
-
-static BOOL _tapControlInView(UIView *view) {
-    if ([view isKindOfClass:[UIControl class]]) {
-        [(UIControl *)view sendActionsForControlEvents:UIControlEventTouchUpInside];
-        return YES;
-    }
-    for (UIView *sub in view.subviews) {
-        if (_tapControlInView(sub)) return YES;
-    }
+static BOOL hudHasHideableText(id hud) {
+    @try {
+        NSString *t = [[hud valueForKey:@"label"] valueForKey:@"text"];
+        if (isHideableText(t)) return YES;
+        t = [[hud valueForKey:@"detailsLabel"] valueForKey:@"text"];
+        if (isHideableText(t)) return YES;
+        t = [hud valueForKey:@"labelText"];
+        if (isHideableText(t)) return YES;
+        t = [hud valueForKey:@"detailsLabelText"];
+        if (isHideableText(t)) return YES;
+    } @catch (NSException *e) {}
     return NO;
 }
 
-static void _tapView(UIView *view) {
-    if (!view) return;
-    if (_tapControlInView(view)) return;
-    for (UIGestureRecognizer *gr in view.gestureRecognizers) {
-        if (![gr isKindOfClass:[UITapGestureRecognizer class]]) continue;
-        NSArray *targets = nil;
-        @try { targets = [gr valueForKey:@"_targets"]; }
-        @catch (NSException *e) {}
-        for (id tgtWrapper in targets) {
-            id target = nil, actionStr = nil;
-            @try {
-                target = [tgtWrapper valueForKey:@"_target"];
-                actionStr = [tgtWrapper valueForKey:@"_action"];
+static void swizzleHUDIfNeeded(void) {
+    Class hudClass = NSClassFromString(@"MBProgressHUD");
+    if (!hudClass) return;
+    SEL sel = @selector(showAnimated:);
+    Method m = class_getInstanceMethod(hudClass, sel);
+    if (!m) {
+        sel = NSSelectorFromString(@"show:");
+        m = class_getInstanceMethod(hudClass, sel);
+    }
+    if (!m) return;
+    SEL captured = sel;
+    gOrigHUDShow = method_setImplementation(m, imp_implementationWithBlock(^(id hud, BOOL animated) {
+        if (hudHasHideableText(hud)) return;
+        if (gOrigHUDShow) ((void(*)(id,SEL,BOOL))objc_msgSend)(hud, captured, animated);
+    }));
+}
+
+// ─── Auto-clicker ────────────────────────────────────────────────────────
+
+static dispatch_source_t  gClickTimer;
+static dispatch_block_t   gAutoStopBlock = nil;
+static dispatch_queue_t   gClickQueue;
+static volatile int32_t   gClickCount   = 0;
+static volatile int32_t   gClickPending = 0;
+static BOOL               gClickRunning = NO;
+static NSInteger          gClickRate    = 500;
+static UIView * __weak    gTargetMike   = nil;
+
+static void stopAutoClick(void);
+
+static void startAutoClick(NSInteger mikeIndex) {
+    stopAutoClick();
+    NSArray *mikes = sortedMikes();
+    if (mikeIndex >= (NSInteger)mikes.count) return;
+    gTargetMike   = mikes[mikeIndex];
+    gClickRunning = YES;
+    if (!gClickQueue)
+        gClickQueue = dispatch_queue_create(NULL, DISPATCH_QUEUE_SERIAL);
+    gClickTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, gClickQueue);
+    uint64_t interval = (uint64_t)(NSEC_PER_SEC / MAX(1, gClickRate));
+    dispatch_source_set_timer(gClickTimer, DISPATCH_TIME_NOW, interval, 0);
+    dispatch_source_set_event_handler(gClickTimer, ^{
+        if (!gClickRunning) return;
+        if (!__sync_bool_compare_and_swap(&gClickPending, 0, 1)) return;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (gClickRunning) {
+                UIView *mike = gTargetMike;
+                if (mike && mike.window != nil) {
+                    [UIView performWithoutAnimation:^{ tapView(mike); }];
+                    __sync_fetch_and_add(&gClickCount, 1);
+                } else {
+                    dispatch_block_t blk = gAutoStopBlock;
+                    if (blk) blk(); else stopAutoClick();
+                }
             }
-            @catch (NSException *e) {}
-            SEL sel = [actionStr isKindOfClass:[NSString class]] ? NSSelectorFromString(actionStr) : NULL;
-            if (target && sel && [target respondsToSelector:sel]) {
+            gClickPending = 0;
+        });
+    });
+    dispatch_resume(gClickTimer);
+}
+
+static void stopAutoClick(void) {
+    gClickRunning = NO;
+    gTargetMike   = nil;
+    gClickPending = 0;
+    if (gClickTimer) {
+        dispatch_source_cancel(gClickTimer);
+        gClickTimer = nil;
+    }
+}
+
+// ─── Multi-account broadcast ──────────────────────────────────────────────
+
+static void broadcastStart(NSInteger micIdx) {
+    NSString *n = [@"com.smith101.broadcast.start." stringByAppendingFormat:@"%ld", (long)micIdx];
+    CFNotificationCenterPostNotification(
+        CFNotificationCenterGetDarwinNotifyCenter(),
+        (__bridge CFStringRef)n, NULL, NULL, YES);
+}
+
+static void broadcastStop(void) {
+    NSString *s = @"com.smith101.broadcast.stop";
+    CFNotificationCenterPostNotification(
+        CFNotificationCenterGetDarwinNotifyCenter(),
+        (__bridge CFStringRef)s, NULL, NULL, YES);
+}
+
+// ─── QultashAlert ─────────────────────────────────────────────────────────
+
+@interface QultashAlert : UIView
+- (instancetype)initWithObjTitle:(NSString *)title onConfirm:(void(^)(void))confirm;
+- (void)show;
+@end
+
+@implementation QultashAlert
+
+- (instancetype)initWithObjTitle:(NSString *)title onConfirm:(void(^)(void))confirm {
+    CGFloat W = 270, H = 230;
+    CGRect  sc = UIScreen.mainScreen.bounds;
+    self = [super initWithFrame:CGRectMake((sc.size.width - W) / 2,
+                                           (sc.size.height - H) / 2, W, H)];
+    self.backgroundColor     = [UIColor colorWithRed:0.03 green:0.03 blue:0.09 alpha:0.98];
+    self.layer.cornerRadius  = 18;
+    self.layer.borderWidth   = 1;
+    self.layer.borderColor   = [UIColor colorWithRed:0.1 green:0.35 blue:1.0 alpha:0.55].CGColor;
+    self.layer.shadowColor   = [UIColor colorWithRed:0.0 green:0.3 blue:1.0 alpha:1].CGColor;
+    self.layer.shadowRadius  = 22;
+    self.layer.shadowOpacity = 0.55f;
+    self.layer.shadowOffset  = CGSizeZero;
+
+    UIView *bar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, W, 38)];
+    bar.backgroundColor     = [UIColor colorWithRed:0.06 green:0.04 blue:0.18 alpha:1];
+    bar.layer.cornerRadius  = 18;
+    bar.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    [self addSubview:bar];
+
+    UILabel *barTitle = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, W, 38)];
+    barTitle.text          = @"Method: .cxx_destruct";
+    barTitle.textAlignment = NSTextAlignmentCenter;
+    barTitle.textColor     = [UIColor colorWithRed:0.55 green:0.65 blue:1.0 alpha:1];
+    barTitle.font          = [UIFont boldSystemFontOfSize:12];
+    [bar addSubview:barTitle];
+    UIPanGestureRecognizer *drag = [[UIPanGestureRecognizer alloc]
+        initWithTarget:self action:@selector(dragged:)];
+    [bar addGestureRecognizer:drag];
+
+    UILabel *objLbl = [[UILabel alloc] initWithFrame:CGRectMake(14, 46, W - 28, 16)];
+    objLbl.text      = title;
+    objLbl.textColor = [UIColor colorWithRed:0.3 green:0.6 blue:1.0 alpha:1];
+    objLbl.font      = [UIFont systemFontOfSize:10.5];
+    objLbl.numberOfLines = 1;
+    objLbl.adjustsFontSizeToFitWidth = YES;
+    [self addSubview:objLbl];
+
+    UIView *sep1 = [[UIView alloc] initWithFrame:CGRectMake(14, 67, W - 28, 0.5)];
+    sep1.backgroundColor = [UIColor colorWithWhite:1 alpha:0.08];
+    [self addSubview:sep1];
+
+    NSArray *lines  = @[@"Signature:", @"- (void).cxx_destruct", @"", @"Return Type:", @"v"];
+    NSArray *colors = @[
+        [UIColor colorWithWhite:0.5 alpha:1],
+        [UIColor colorWithRed:0.9 green:0.9 blue:1.0 alpha:1],
+        [UIColor clearColor],
+        [UIColor colorWithWhite:0.5 alpha:1],
+        [UIColor colorWithRed:0.9 green:0.9 blue:1.0 alpha:1],
+    ];
+    UIFont *mono = [UIFont fontWithName:@"Courier-Bold" size:12] ?: [UIFont boldSystemFontOfSize:11];
+    NSArray *fonts = @[
+        [UIFont systemFontOfSize:11], mono,
+        [UIFont systemFontOfSize:6],
+        [UIFont systemFontOfSize:11], mono,
+    ];
+    CGFloat y = 74;
+    for (int i = 0; i < 5; i++) {
+        UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(14, y, W - 28, 18)];
+        l.text = lines[i]; l.textColor = colors[i]; l.font = fonts[i];
+        [self addSubview:l]; y += 18;
+    }
+
+    UIView *sep2 = [[UIView alloc] initWithFrame:CGRectMake(14, y + 2, W - 28, 0.5)];
+    sep2.backgroundColor = [UIColor colorWithWhite:1 alpha:0.08];
+    [self addSubview:sep2];
+
+    CGFloat bY = y + 10, bH = 36, bW = (W - 32) / 2;
+
+    UIButton *cancel = [UIButton buttonWithType:UIButtonTypeCustom];
+    cancel.frame = CGRectMake(12, bY, bW, bH);
+    [cancel setTitle:@"إلغاء" forState:UIControlStateNormal];
+    cancel.titleLabel.font    = [UIFont boldSystemFontOfSize:13];
+    cancel.backgroundColor    = [UIColor colorWithRed:0.60 green:0.04 blue:0.10 alpha:1];
+    cancel.layer.cornerRadius = bH / 2;
+    cancel.layer.shadowColor  = [UIColor colorWithRed:1.0 green:0.0 blue:0.1 alpha:1].CGColor;
+    cancel.layer.shadowRadius = 7; cancel.layer.shadowOpacity = 0.5f; cancel.layer.shadowOffset = CGSizeZero;
+    [cancel addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:cancel];
+
+    void (^cb)(void) = [confirm copy];
+    UIButton *ok = [UIButton buttonWithType:UIButtonTypeCustom];
+    ok.frame = CGRectMake(12 + bW + 8, bY, bW, bH);
+    [ok setTitle:@"موافقة" forState:UIControlStateNormal];
+    ok.titleLabel.font    = [UIFont boldSystemFontOfSize:13];
+    ok.backgroundColor    = [UIColor colorWithRed:0.04 green:0.35 blue:0.90 alpha:1];
+    ok.layer.cornerRadius = bH / 2;
+    ok.layer.shadowColor  = [UIColor colorWithRed:0.0 green:0.4 blue:1.0 alpha:1].CGColor;
+    ok.layer.shadowRadius = 7; ok.layer.shadowOpacity = 0.5f; ok.layer.shadowOffset = CGSizeZero;
+    objc_setAssociatedObject(ok, "cb", cb, OBJC_ASSOCIATION_COPY);
+    [ok addTarget:self action:@selector(confirmTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [ok addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:ok];
+    return self;
+}
+- (void)confirmTapped:(UIButton *)btn {
+    void (^cb)(void) = objc_getAssociatedObject(btn, "cb");
+    if (cb) cb();
+}
+- (void)dragged:(UIPanGestureRecognizer *)g {
+    CGPoint d = [g translationInView:self.superview];
+    CGRect  f = CGRectOffset(self.frame, d.x, d.y);
+    CGRect sc = UIScreen.mainScreen.bounds;
+    f.origin.x = MAX(0, MIN(f.origin.x, sc.size.width  - f.size.width));
+    f.origin.y = MAX(0, MIN(f.origin.y, sc.size.height - f.size.height));
+    self.frame = f;
+    [g setTranslation:CGPointZero inView:self.superview];
+}
+- (void)show {
+    UIWindow *kw = nil;
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                [target performSelector:sel withObject:gr];
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    for (UIWindow *w in UIApplication.sharedApplication.windows)
+        if (w.isKeyWindow) { kw = w; break; }
 #pragma clang diagnostic pop
-            }
-        }
+    self.alpha = 0; self.transform = CGAffineTransformMakeScale(0.88, 0.88);
+    [kw.rootViewController.view addSubview:self];
+    [UIView animateWithDuration:0.25 delay:0 usingSpringWithDamping:0.75
+          initialSpringVelocity:0.5 options:0 animations:^{
+        self.alpha = 1; self.transform = CGAffineTransformIdentity;
+    } completion:nil];
+}
+- (void)dismiss {
+    [UIView animateWithDuration:0.18 animations:^{
+        self.alpha = 0; self.transform = CGAffineTransformMakeScale(0.88, 0.88);
+    } completion:^(BOOL done) { [self removeFromSuperview]; }];
+}
+@end
+
+// ─── فعل (Swipe-to-Activate) ─────────────────────────────────────────────
+
+@interface FaelBtn : UIView
+@property (nonatomic, copy) void (^onActivate)(void);
+- (void)setRunning:(BOOL)running;
+@end
+
+@implementation FaelBtn {
+    UIView  *_thumb;
+    UILabel *_lbl;
+}
+- (instancetype)initWithFrame:(CGRect)f {
+    self = [super initWithFrame:f];
+    self.backgroundColor    = [UIColor colorWithRed:0.14 green:0.52 blue:1 alpha:1];
+    self.layer.cornerRadius = f.size.height / 2;
+    self.clipsToBounds      = YES;
+    _lbl = [[UILabel alloc] initWithFrame:self.bounds];
+    _lbl.text          = @"فعل ›";
+    _lbl.textColor     = UIColor.whiteColor;
+    _lbl.textAlignment = NSTextAlignmentCenter;
+    _lbl.font          = [UIFont boldSystemFontOfSize:14];
+    [self addSubview:_lbl];
+    CGFloat h = f.size.height - 8;
+    _thumb = [[UIView alloc] initWithFrame:CGRectMake(4, 4, h, h)];
+    _thumb.backgroundColor    = [UIColor colorWithWhite:1 alpha:0.25];
+    _thumb.layer.cornerRadius = h / 2;
+    [self addSubview:_thumb];
+    return self;
+}
+- (CGFloat)maxX { return self.bounds.size.width - _thumb.bounds.size.width - 4; }
+- (void)touchesMoved:(NSSet<UITouch *> *)ts withEvent:(UIEvent *)e {
+    CGPoint p = [[ts anyObject] locationInView:self];
+    CGFloat x = MAX(4, MIN(p.x - _thumb.bounds.size.width / 2, self.maxX));
+    _thumb.frame = CGRectMake(x, _thumb.frame.origin.y,
+                              _thumb.bounds.size.width, _thumb.bounds.size.height);
+    _lbl.alpha = 1.0 - 0.5 * (x - 4) / MAX(1, self.maxX - 4);
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)ts withEvent:(UIEvent *)e {
+    CGFloat prog = (_thumb.frame.origin.x - 4) / MAX(1, self.maxX - 4);
+    if (prog >= 0.7 && self.onActivate) self.onActivate();
+    [UIView animateWithDuration:0.2 animations:^{
+        self->_thumb.frame = CGRectMake(4, self->_thumb.frame.origin.y,
+                                        self->_thumb.bounds.size.width,
+                                        self->_thumb.bounds.size.height);
+        self->_lbl.alpha = 1;
+    }];
+}
+- (void)touchesCancelled:(NSSet<UITouch *> *)ts withEvent:(UIEvent *)e {
+    [self touchesEnded:ts withEvent:e];
+}
+- (void)setRunning:(BOOL)running {
+    self.userInteractionEnabled = !running;
+    if (running) {
+        self.backgroundColor = [UIColor colorWithRed:0.85 green:0.35 blue:0.1 alpha:1];
+        _lbl.text = @"● يعمل";
+        [UIView animateWithDuration:0.3 animations:^{
+            self->_thumb.frame = CGRectMake(self.maxX, self->_thumb.frame.origin.y,
+                                            self->_thumb.bounds.size.width,
+                                            self->_thumb.bounds.size.height);
+        }];
+    } else {
+        self.backgroundColor = [UIColor colorWithRed:0.14 green:0.52 blue:1 alpha:1];
+        _lbl.text = @"فعل ›";
+        _lbl.alpha = 1;
+        [UIView animateWithDuration:0.3 animations:^{
+            self->_thumb.frame = CGRectMake(4, self->_thumb.frame.origin.y,
+                                            self->_thumb.bounds.size.width,
+                                            self->_thumb.bounds.size.height);
+        }];
+    }
+}
+@end
+
+// ─── Mic Panel ────────────────────────────────────────────────────────────
+
+@interface MicPanel : UIView
+- (void)updateMikeCount:(NSUInteger)count;
+- (void)autoStop;
+- (void)remoteStart:(NSInteger)micIdx;
+- (void)remoteStop;
+@end
+
+@implementation MicPanel {
+    NSMutableArray<UIButton *> *_btns;
+    NSInteger   _sel;
+    UILabel    *_status;
+    UILabel    *_rateLabel;
+    UISlider   *_rateSlider;
+    FaelBtn    *_fael;
+    NSTimer    *_counterTimer;
+    UILabel    *_titleMask;
+}
+
+- (instancetype)initWithFrame:(CGRect)f {
+    self = [super initWithFrame:f];
+    _sel = -1;
+    self.hidden = YES;
+    [self build];
+    return self;
+}
+
+- (void)build {
+    CGFloat W = self.bounds.size.width;
+    self.backgroundColor     = [UIColor colorWithRed:0.03 green:0.03 blue:0.09 alpha:0.97];
+    self.layer.cornerRadius  = 18;
+    self.layer.borderWidth   = 1;
+    self.layer.borderColor   = [UIColor colorWithRed:0.1 green:0.35 blue:1.0 alpha:0.5].CGColor;
+    self.layer.shadowColor   = [UIColor colorWithRed:0.0 green:0.3 blue:1.0 alpha:1].CGColor;
+    self.layer.shadowRadius  = 18;
+    self.layer.shadowOpacity = 0.45f;
+    self.layer.shadowOffset  = CGSizeMake(0, 4);
+
+    UIView *bar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, W, 40)];
+    bar.backgroundColor     = [UIColor colorWithRed:0.06 green:0.04 blue:0.18 alpha:1];
+    bar.layer.cornerRadius  = 18;
+    bar.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    [self addSubview:bar];
+
+    UIView *gradView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, W, 40)];
+    [bar addSubview:gradView];
+
+    _titleMask = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, W, 40)];
+    _titleMask.text          = @"Rebellion • Smith";
+    _titleMask.textAlignment = NSTextAlignmentCenter;
+    _titleMask.textColor     = UIColor.whiteColor;
+    _titleMask.font          = [UIFont boldSystemFontOfSize:14];
+    gradView.layer.mask = _titleMask.layer;
+
+    CAGradientLayer *grad = [CAGradientLayer layer];
+    grad.frame      = CGRectMake(0, 0, W * 3, 40);
+    grad.startPoint = CGPointMake(0, 0.5);
+    grad.endPoint   = CGPointMake(1, 0.5);
+    grad.colors = @[
+        (id)[UIColor colorWithRed:0.90 green:0.08 blue:0.20 alpha:1].CGColor,
+        (id)[UIColor colorWithRed:0.10 green:0.45 blue:1.00 alpha:1].CGColor,
+        (id)[UIColor colorWithRed:1.00 green:0.78 blue:0.08 alpha:1].CGColor,
+        (id)[UIColor colorWithRed:0.90 green:0.08 blue:0.20 alpha:1].CGColor,
+        (id)[UIColor colorWithRed:0.10 green:0.45 blue:1.00 alpha:1].CGColor,
+        (id)[UIColor colorWithRed:1.00 green:0.78 blue:0.08 alpha:1].CGColor,
+        (id)[UIColor colorWithRed:0.90 green:0.08 blue:0.20 alpha:1].CGColor,
+    ];
+    [gradView.layer addSublayer:grad];
+
+    CABasicAnimation *wave = [CABasicAnimation animationWithKeyPath:@"transform.translation.x"];
+    wave.fromValue      = @0;
+    wave.toValue        = @(-W);
+    wave.duration       = 2.5;
+    wave.repeatCount    = HUGE_VALF;
+    wave.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+    [grad addAnimation:wave forKey:@"wave"];
+
+    UIPanGestureRecognizer *drag = [[UIPanGestureRecognizer alloc]
+        initWithTarget:self action:@selector(drag:)];
+    [bar addGestureRecognizer:drag];
+
+    _btns = [NSMutableArray array];
+    CGFloat bSz = 42, gap = (W - 5 * bSz) / 6;
+    for (int i = 0; i < 10; i++) {
+        int row = i / 5, col = i % 5;
+        UIButton *b = [UIButton buttonWithType:UIButtonTypeCustom];
+        b.frame = CGRectMake(gap + col * (bSz + gap), 52 + row * (bSz + 8), bSz, bSz);
+        [b setTitle:[NSString stringWithFormat:@"%d", i + 1] forState:UIControlStateNormal];
+        b.titleLabel.font    = [UIFont boldSystemFontOfSize:15];
+        b.backgroundColor    = [UIColor colorWithRed:0.09 green:0.09 blue:0.22 alpha:1];
+        b.layer.cornerRadius = bSz / 2;
+        b.tag = i;
+        [b addTarget:self action:@selector(pick:) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:b];
+        [_btns addObject:b];
+    }
+
+    CGFloat afterBtns = 52 + 2 * (bSz + 8) + 6;
+
+    _status = [[UILabel alloc] initWithFrame:CGRectMake(0, afterBtns, W, 22)];
+    _status.text          = @"لم يتم الاختيار";
+    _status.textAlignment = NSTextAlignmentCenter;
+    _status.textColor     = [UIColor colorWithWhite:0.6 alpha:1];
+    _status.font          = [UIFont systemFontOfSize:12];
+    [self addSubview:_status];
+
+    CGFloat rowY = CGRectGetMaxY(_status.frame) + 8;
+    CGFloat rowH = 44;
+    CGFloat btnW = (W - 12 - 8 - 12) / 2;
+
+    UIButton *stop = [UIButton buttonWithType:UIButtonTypeCustom];
+    stop.frame = CGRectMake(12, rowY, btnW, rowH);
+    [stop setTitle:@"إيقاف" forState:UIControlStateNormal];
+    stop.titleLabel.font    = [UIFont boldSystemFontOfSize:14];
+    stop.backgroundColor    = [UIColor colorWithRed:0.78 green:0.04 blue:0.13 alpha:1];
+    stop.layer.cornerRadius = rowH / 2;
+    stop.layer.shadowColor  = [UIColor colorWithRed:1.0 green:0.0 blue:0.1 alpha:1].CGColor;
+    stop.layer.shadowRadius = 8; stop.layer.shadowOpacity = 0.6f; stop.layer.shadowOffset = CGSizeZero;
+    [stop addTarget:self action:@selector(doStop) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:stop];
+
+    _fael = [[FaelBtn alloc] initWithFrame:CGRectMake(12 + btnW + 8, rowY, btnW, rowH)];
+    __weak typeof(self) ws = self;
+    _fael.onActivate = ^{ [ws doStart]; };
+    [self addSubview:_fael];
+
+    CGFloat slY = CGRectGetMaxY(_fael.frame) + 8;
+    _rateLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, slY, W, 18)];
+    _rateLabel.text          = @"السرعة: 500 ض/ث";
+    _rateLabel.textAlignment = NSTextAlignmentCenter;
+    _rateLabel.textColor     = [UIColor colorWithWhite:0.75 alpha:1];
+    _rateLabel.font          = [UIFont systemFontOfSize:12];
+    [self addSubview:_rateLabel];
+
+    _rateSlider = [[UISlider alloc] initWithFrame:CGRectMake(12, slY + 22, W - 24, 30)];
+    _rateSlider.minimumValue          = 1;
+    _rateSlider.maximumValue          = 1500;
+    _rateSlider.value                 = 500;
+    _rateSlider.minimumTrackTintColor = [UIColor colorWithRed:0.10 green:0.45 blue:1.0 alpha:1];
+    [_rateSlider addTarget:self action:@selector(rateChanged:)
+          forControlEvents:UIControlEventValueChanged];
+    [self addSubview:_rateSlider];
+
+    CGFloat ctrY = CGRectGetMaxY(_rateSlider.frame) + 6;
+    UIButton *qBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    qBtn.frame = CGRectMake(12, ctrY, W - 24, 26);
+    [qBtn setTitle:@"قلتش" forState:UIControlStateNormal];
+    qBtn.titleLabel.font    = [UIFont boldSystemFontOfSize:13];
+    qBtn.backgroundColor    = [UIColor colorWithRed:0.06 green:0.06 blue:0.20 alpha:1];
+    qBtn.layer.cornerRadius = 10;
+    qBtn.layer.borderWidth  = 0.8;
+    qBtn.layer.borderColor  = [UIColor colorWithRed:0.5 green:0.2 blue:1.0 alpha:0.6].CGColor;
+    qBtn.layer.shadowColor  = [UIColor colorWithRed:0.5 green:0.0 blue:1.0 alpha:1].CGColor;
+    qBtn.layer.shadowRadius = 6; qBtn.layer.shadowOpacity = 0.4f; qBtn.layer.shadowOffset = CGSizeZero;
+    [qBtn addTarget:self action:@selector(qultashTapped) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:qBtn];
+}
+
+- (void)updateMikeCount:(NSUInteger)count {
+    if (_sel < 0)
+        _status.text = [NSString stringWithFormat:@"مايكات في الروم: %lu", (unsigned long)count];
+}
+
+- (void)rateChanged:(UISlider *)s {
+    gClickRate = (NSInteger)s.value;
+    _rateLabel.text = [NSString stringWithFormat:@"السرعة: %ld ض/ث", (long)gClickRate];
+    if (gClickRunning) startAutoClick(_sel);
+}
+
+- (void)pick:(UIButton *)b {
+    _sel = b.tag;
+    for (UIButton *x in _btns)
+        x.backgroundColor = [UIColor colorWithWhite:0.22 alpha:1];
+    b.backgroundColor = [UIColor colorWithRed:0.05 green:0.40 blue:1.0 alpha:1];
+    _status.text = [NSString stringWithFormat:@"تم اختيار مايك %ld", (long)(_sel + 1)];
+}
+
+- (void)doStart {
+    if (_sel < 0) { _status.text = @"اختر مايك أولاً"; return; }
+    NSArray *mikes = sortedMikes();
+    if (_sel >= (NSInteger)mikes.count) {
+        _status.text = [NSString stringWithFormat:@"مايك %ld غير موجود", (long)(_sel + 1)];
         return;
     }
+    gClickCount = 0;
+    startAutoClick(_sel);
+    [_fael setRunning:YES];
+    _status.text = [NSString stringWithFormat:@"مايك %ld يعمل", (long)(_sel + 1)];
+    broadcastStart(_sel);
 }
 
-static void _startAutoClick(NSInteger idx) {
-    _stopAutoClick();
-    NSArray *mikes = _sortedMikes();
-    if ((NSUInteger)idx >= mikes.count) return;
+- (void)doStop {
+    gClickRunning = NO;
+    gTargetMike   = nil;
+    stopAutoClick();
+    broadcastStop();
+    [_counterTimer invalidate];
+    _counterTimer = nil;
+    [_fael setRunning:NO];
+    NSString *msg = gClickCount > 0
+        ? [NSString stringWithFormat:@"توقف عند: %d ضغطة", (int)gClickCount]
+        : @"تم الإيقاف";
+    _status.text = msg;
+    gClickCount = 0;
+    for (UIButton *b in _btns)
+        b.backgroundColor = [UIColor colorWithRed:0.09 green:0.09 blue:0.22 alpha:1];
+    _sel = -1;
+}
 
-    _gTargetMike   = mikes[idx];
-    _gClickRunning = YES;
+- (void)autoStop {
+    gClickRunning = NO;
+    gTargetMike   = nil;
+    stopAutoClick();
+    [_counterTimer invalidate];
+    _counterTimer = nil;
+    [_fael setRunning:NO];
+    NSString *saved = (_sel >= 0)
+        ? [NSString stringWithFormat:@"⚠ طيرك - مايك %ld محفوظ", (long)(_sel + 1)]
+        : @"⚠ طيرك - توقف تلقائي";
+    _status.text = gClickCount > 0
+        ? [NSString stringWithFormat:@"%@ | %d ض", saved, (int)gClickCount]
+        : saved;
+    gClickCount = 0;
+    dispatch_async(dispatch_get_main_queue(), ^{ self.hidden = NO; });
+}
 
-    if (!_gClickQueue) {
-        _gClickQueue = dispatch_queue_create("smith101.clicker", NULL);
+- (void)remoteStart:(NSInteger)micIdx {
+    if (gClickRunning) return;
+    NSArray *mikes = sortedMikes();
+    if (micIdx < 0 || micIdx >= (NSInteger)mikes.count) return;
+    _sel = micIdx;
+    gClickCount = 0;
+    startAutoClick(micIdx);
+    [_fael setRunning:YES];
+    if (micIdx < (NSInteger)_btns.count) {
+        for (UIButton *b in _btns)
+            b.backgroundColor = [UIColor colorWithRed:0.09 green:0.09 blue:0.22 alpha:1];
+        ((UIButton *)_btns[micIdx]).backgroundColor = [UIColor colorWithRed:0.05 green:0.40 blue:1.0 alpha:1];
     }
-
-    NSInteger rate   = MAX(1, _gClickRate);
-    uint64_t  itvl   = (uint64_t)(1000000000ULL / (uint64_t)rate);
-
-    _gClickTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _gClickQueue);
-    dispatch_source_set_timer(_gClickTimer, DISPATCH_TIME_NOW, itvl, 0);
-    dispatch_source_set_event_handler(_gClickTimer, ^{
-        if (!_gClickRunning) return;
-        if (_gClickPending != 0) return;
-        if (__sync_bool_compare_and_swap(&_gClickPending, 0, 1)) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (_gClickRunning) {
-                    UIView *tgt = _gTargetMike;
-                    if (tgt && tgt.window) {
-                        [UIView performWithoutAnimation:^{ _tapView(tgt); }];
-                        __sync_fetch_and_add(&_gClickCount, 1);
-                    } else {
-                        if (_gAutoStopBlock) _gAutoStopBlock();
-                        else _stopAutoClick();
-                    }
-                }
-                _gClickPending = 0;
-            });
-        }
-    });
-    dispatch_resume(_gClickTimer);
+    _status.text = [NSString stringWithFormat:@"مايك %ld يعمل", (long)(micIdx + 1)];
 }
 
-static void _stopAutoClick(void) {
-    _gClickRunning = NO;
-    _gClickPending = 0;
-    if (_gClickTimer) {
-        dispatch_source_cancel(_gClickTimer);
-        _gClickTimer = nil;
-    }
-    _gTargetMike = nil;
+- (void)remoteStop {
+    if (!gClickRunning) return;
+    gClickRunning = NO;
+    gTargetMike   = nil;
+    stopAutoClick();
+    [_fael setRunning:NO];
+    _status.text = @"تم الإيقاف";
 }
 
-static void _broadcastStart(NSInteger idx) {
-    CFNotificationCenterRef c = CFNotificationCenterGetDarwinNotifyCenter();
-    NSString *name = [NSString stringWithFormat:@"com.smith101.broadcast.start.%ld", (long)idx];
-    CFNotificationCenterPostNotification(c, (__bridge CFStringRef)name, NULL, NULL, YES);
-}
-
-static void _broadcastStop(void) {
-    CFNotificationCenterRef c = CFNotificationCenterGetDarwinNotifyCenter();
-    CFNotificationCenterPostNotification(c, CFSTR("com.smith101.broadcast.stop"), NULL, NULL, YES);
-}
-
-static BOOL _isHideableText(NSString *text) {
-    if (!text || text.length == 0) return NO;
-    NSString *lower = [text lowercaseString];
-    for (NSString *kw in @[@"miclocked", @"lockedbyowner", @"alreadyonmic",
-                           @"you are already on", @"connectionlost", @"networkconnection"]) {
-        if ([lower containsString:kw]) return YES;
-    }
-    return NO;
-}
-
-static void _hideLocked(UIView *root) {
-    for (UIView *v in root.subviews) {
-        NSString *text = nil;
-        if ([v isKindOfClass:[UILabel class]])    text = ((UILabel *)v).text;
-        else if ([v isKindOfClass:[UITextView class]]) text = ((UITextView *)v).text;
-        if (_isHideableText(text)) {
-            v.hidden = YES;
-            v.alpha  = 0;
-            if (v.superview) { v.superview.hidden = YES; v.superview.alpha = 0; }
-        }
-        _hideLocked(v);
-    }
-}
-
-static BOOL _hudHasHideableText(id hud) {
-    NSString *t1 = nil, *t2 = nil, *t3 = nil, *t4 = nil;
-    @try { t1 = [hud valueForKeyPath:@"label.text"]; } @catch (NSException *e) {}
-    @try { t2 = [hud valueForKeyPath:@"detailsLabel.text"]; } @catch (NSException *e) {}
-    @try { t3 = [hud valueForKey:@"labelText"]; } @catch (NSException *e) {}
-    @try { t4 = [hud valueForKey:@"detailsLabelText"]; } @catch (NSException *e) {}
-    return _isHideableText(t1) || _isHideableText(t2) || _isHideableText(t3) || _isHideableText(t4);
-}
-
-static void _swizzleHUDIfNeeded(void) {
-    Class cls = NSClassFromString(@"MBProgressHUD");
-    if (!cls) return;
-    SEL sel = NSSelectorFromString(@"showAnimated:");
-    if (!sel) sel = NSSelectorFromString(@"show:");
-    Method m = class_getInstanceMethod(cls, sel);
-    if (!m) return;
-    SEL capSel = sel;
-    IMP newImp = imp_implementationWithBlock(^(id self, BOOL animated) {
-        if (!_hudHasHideableText(self) && _gOrigHUDShow)
-            ((void(*)(id,SEL,BOOL))_gOrigHUDShow)(self, capSel, animated);
-    });
-    _gOrigHUDShow = method_setImplementation(m, newImp);
-}
-
-static void _onRemoteStart(CFNotificationCenterRef c, void *o,
-                           CFStringRef name, const void *obj, CFDictionaryRef info) {
-    NSString *n   = (__bridge NSString *)name;
-    NSInteger idx = [n.pathExtension integerValue];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (_gPanel && !_gClickRunning) [(MicPanel *)_gPanel remoteStart:idx];
-    });
-}
-
-static void _onRemoteStop(CFNotificationCenterRef c, void *o,
-                          CFStringRef name, const void *obj, CFDictionaryRef info) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (_gPanel) [(MicPanel *)_gPanel remoteStop];
-    });
-}
-
-static void _registerBroadcastListeners(void) {
-    CFNotificationCenterRef c = CFNotificationCenterGetDarwinNotifyCenter();
-    for (int i = 0; i < 10; i++) {
-        NSString *n = [NSString stringWithFormat:@"com.smith101.broadcast.start.%d", i];
-        CFNotificationCenterAddObserver(c, NULL, _onRemoteStart,
-                                        (__bridge CFStringRef)n, NULL,
-                                        CFNotificationSuspensionBehaviorDeliverImmediately);
-    }
-    CFNotificationCenterAddObserver(c, NULL, _onRemoteStop,
-                                    CFSTR("com.smith101.broadcast.stop"), NULL,
-                                    CFNotificationSuspensionBehaviorDeliverImmediately);
-}
-
-
-// ── Constructor / Destructor ──────────────────────────────────────────────────
-__attribute__((constructor)) static void _smith101_load(void) {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{
-        CGRect screen = [UIScreen mainScreen].bounds;
-        CGFloat pw = 280, ph = 342;
-
-        PassWin *win = [[PassWin alloc] initWithFrame:screen];
-        _gWin = win;
-        win.windowLevel = UIWindowLevelAlert + 100;
-        win.backgroundColor = [UIColor clearColor];
-
-        UIViewController *vc = [UIViewController new];
-        vc.view.backgroundColor = [UIColor clearColor];
-        win.rootViewController = vc;
-        [win makeKeyAndVisible];
-
-        MicPanel *panel = [[MicPanel alloc]
-            initWithFrame:CGRectMake((screen.size.width - pw) / 2, 100, pw, ph)];
-        _gPanel = panel;
-        [vc.view addSubview:panel];
-
-        _gAutoStopBlock = ^{ [(MicPanel *)_gPanel autoStop]; };
-
-        // Floating toggle button
-        UIButton *swt = [UIButton buttonWithType:UIButtonTypeCustom];
-        _gSWTBtn = swt;
-        swt.frame = CGRectMake(screen.size.width - 68, 120, 60, 28);
-        swt.backgroundColor = [UIColor colorWithRed:0.12 green:0.12 blue:0.18 alpha:0.9];
-        swt.layer.cornerRadius = 14;
-        swt.layer.masksToBounds = YES;
-        swt.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.45].CGColor;
-        swt.layer.borderWidth = 0.5;
-        [swt setTitle:@"SWT" forState:UIControlStateNormal];
-        swt.titleLabel.font = [UIFont boldSystemFontOfSize:11];
-        swt.hidden = YES;
-
-        SWTHelper *helper = [SWTHelper shared];
-        [swt addTarget:helper action:@selector(tapped:) forControlEvents:UIControlEventTouchUpInside];
-        UIPanGestureRecognizer *panGR = [[UIPanGestureRecognizer alloc]
-            initWithTarget:helper action:@selector(dragged:)];
-        [swt addGestureRecognizer:panGR];
-        [vc.view addSubview:swt];
-
-        // Room timer — fires every 200ms on main queue
-        _gRoomTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-                                             dispatch_get_main_queue());
-        dispatch_source_set_timer(_gRoomTimer, DISPATCH_TIME_NOW, 200000000ULL, 0);
-
-        static BOOL prevHadMikes = NO;
-        dispatch_source_set_event_handler(_gRoomTimer, ^{
+- (void)qultashTapped {
+    Class cls = NSClassFromString(@"YallaLite.LTLiveMikeFace")
+             ?: NSClassFromString(@"LTLiveMikeFace");
+    NSMutableArray *faces = [NSMutableArray array];
+    if (cls) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-            NSArray *roomWindows = [UIApplication sharedApplication].windows;
+        for (UIWindow *w in UIApplication.sharedApplication.windows)
+            if (w != self.window) [faces addObjectsFromArray:collectViews(w, cls)];
 #pragma clang diagnostic pop
-            for (UIWindow *w in roomWindows) {
-                if (w != _gWin) {
-                    _hideLocked(w);
-                    _hideDecorativeViews(w);
-                }
-            }
-            NSArray *mikes = _sortedMikes();
-            BOOL hasMikes = mikes.count > 0;
-            _gSWTBtn.hidden = !hasMikes;
-            if (hasMikes) {
-                [(MicPanel *)_gPanel updateMikeCount:mikes.count];
-            } else if (prevHadMikes) {
-                [(MicPanel *)_gPanel autoStop];
-            }
-            prevHadMikes = hasMikes;
-        });
-        dispatch_resume(_gRoomTimer);
+    }
+    NSString *objTitle = faces.count > 0
+        ? [NSString stringWithFormat:@"YallaLite.LTLiveMikeFace %p", (void *)faces.firstObject]
+        : @"YallaLite.LTLiveMikeFace";
+    NSArray *facesToCall = [faces copy];
+    QultashAlert *alert = [[QultashAlert alloc] initWithObjTitle:objTitle onConfirm:^{
+        const uint8_t _cxe[] = {0x75,0x0E,0x05,0x05,0x48,0x09,0x0A,0x1F,0x1C,0x1D,0x09,0x0A,0x1C};
+        char _cxd[14]; for(int _i=0;_i<13;_i++) _cxd[_i]=(char)(_cxe[_i]^0x5B); _cxd[13]=0;
+        SEL sel = sel_registerName(_cxd);
+        for (id face in facesToCall) {
+            if ([face respondsToSelector:sel])
+                ((void(*)(id,SEL))objc_msgSend)(face, sel);
+        }
+    }];
+    [alert show];
+}
 
-        _swizzleHUDIfNeeded();
-        _registerBroadcastListeners();
+- (void)drag:(UIPanGestureRecognizer *)g {
+    CGPoint d = [g translationInView:self.superview];
+    CGRect  f = CGRectOffset(self.frame, d.x, d.y);
+    CGRect sc = UIScreen.mainScreen.bounds;
+    f.origin.x = MAX(0, MIN(f.origin.x, sc.size.width  - f.size.width));
+    f.origin.y = MAX(0, MIN(f.origin.y, sc.size.height - f.size.height));
+    self.frame = f;
+    [g setTranslation:CGPointZero inView:self.superview];
+}
+@end
+
+// ─── #SWT Helper ──────────────────────────────────────────────────────────
+
+static MicPanel *gPanel;
+
+@interface SWTHelper : NSObject
++ (instancetype)shared;
+- (void)tapped:(UIButton *)b;
+- (void)dragged:(UIPanGestureRecognizer *)g;
+@end
+@implementation SWTHelper
++ (instancetype)shared {
+    static SWTHelper *s; static dispatch_once_t t;
+    dispatch_once(&t, ^{ s = [SWTHelper new]; });
+    return s;
+}
+- (void)tapped:(UIButton *)b    { gPanel.hidden = !gPanel.hidden; }
+- (void)dragged:(UIPanGestureRecognizer *)g {
+    UIView *v = g.view;
+    CGPoint d = [g translationInView:v.superview];
+    CGRect  f = CGRectOffset(v.frame, d.x, d.y);
+    CGRect sc = UIScreen.mainScreen.bounds;
+    f.origin.x = MAX(0, MIN(f.origin.x, sc.size.width  - f.size.width));
+    f.origin.y = MAX(0, MIN(f.origin.y, sc.size.height - f.size.height));
+    v.frame = f;
+    [g setTranslation:CGPointZero inView:v.superview];
+}
+@end
+
+// ─── Pass-through Window ──────────────────────────────────────────────────
+
+@interface PassWin : UIWindow @end
+@implementation PassWin
+- (UIView *)hitTest:(CGPoint)p withEvent:(UIEvent *)e {
+    UIView *v = [super hitTest:p withEvent:e];
+    return (v == self.rootViewController.view) ? nil : v;
+}
+@end
+
+// ─── Entry point ──────────────────────────────────────────────────────────
+
+static PassWin          *gWin;
+static UIButton         *gSWTBtn;
+static dispatch_source_t gRoomTimer;
+
+static void onRemoteStart(CFNotificationCenterRef c, void *o, CFStringRef name,
+                           const void *obj, CFDictionaryRef info) {
+    NSString *n = (__bridge NSString *)name;
+    NSInteger idx = [n.pathExtension integerValue];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gPanel && !gClickRunning) [gPanel remoteStart:idx];
     });
 }
 
-__attribute__((destructor)) static void _smith101_unload(void) {
-    if (_gRoomTimer) { dispatch_source_cancel(_gRoomTimer); _gRoomTimer = nil; }
-    _stopAutoClick();
-    _gWin = nil;
+static void onRemoteStop(CFNotificationCenterRef c, void *o, CFStringRef name,
+                          const void *obj, CFDictionaryRef info) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gPanel) [gPanel remoteStop];
+    });
+}
+
+static void registerBroadcastListeners(void) {
+    CFNotificationCenterRef dc = CFNotificationCenterGetDarwinNotifyCenter();
+    NSString *base = @"com.smith101.broadcast.start.";
+    for (int i = 0; i < 10; i++) {
+        NSString *n = [base stringByAppendingFormat:@"%d", i];
+        CFNotificationCenterAddObserver(dc, NULL, onRemoteStart,
+            (__bridge CFStringRef)n, NULL,
+            CFNotificationSuspensionBehaviorDeliverImmediately);
+    }
+    CFNotificationCenterAddObserver(dc, NULL, onRemoteStop,
+        CFSTR("com.smith101.broadcast.stop"), NULL,
+        CFNotificationSuspensionBehaviorDeliverImmediately);
+}
+
+__attribute__((constructor))
+static void smith101_load(void) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+
+        CGRect  sc = UIScreen.mainScreen.bounds;
+        CGFloat W  = 280, H = 342;
+
+        gWin = [[PassWin alloc] initWithFrame:sc];
+        gWin.windowLevel     = UIWindowLevelAlert + 100;
+        gWin.backgroundColor = UIColor.clearColor;
+
+        UIViewController *vc = [UIViewController new];
+        vc.view.backgroundColor = UIColor.clearColor;
+        gWin.rootViewController = vc;
+        [gWin makeKeyAndVisible];
+
+        gPanel = [[MicPanel alloc] initWithFrame:
+            CGRectMake((sc.size.width - W) / 2, 100, W, H)];
+        [vc.view addSubview:gPanel];
+        gAutoStopBlock = ^{ [gPanel autoStop]; };
+
+        gSWTBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        gSWTBtn.frame              = CGRectMake(sc.size.width - 68, 120, 60, 28);
+        gSWTBtn.backgroundColor    = [UIColor colorWithRed:0.1 green:0.1 blue:0.2 alpha:0.85];
+        gSWTBtn.layer.cornerRadius = 14;
+        gSWTBtn.layer.borderWidth  = 1;
+        gSWTBtn.layer.borderColor  = [UIColor colorWithWhite:1 alpha:0.2].CGColor;
+        [gSWTBtn setTitle:@"#SWT" forState:UIControlStateNormal];
+        gSWTBtn.titleLabel.font = [UIFont boldSystemFontOfSize:11];
+        gSWTBtn.hidden = YES;
+        [gSWTBtn addTarget:[SWTHelper shared] action:@selector(tapped:)
+              forControlEvents:UIControlEventTouchUpInside];
+        UIPanGestureRecognizer *panGR = [[UIPanGestureRecognizer alloc]
+            initWithTarget:[SWTHelper shared] action:@selector(dragged:)];
+        [gSWTBtn addGestureRecognizer:panGR];
+        [vc.view addSubview:gSWTBtn];
+
+        gRoomTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                            dispatch_get_main_queue());
+        dispatch_source_set_timer(gRoomTimer, DISPATCH_TIME_NOW,
+                                  (uint64_t)(0.2 * NSEC_PER_SEC), 0);
+        __block BOOL wasInRoom = NO;
+        dispatch_source_set_event_handler(gRoomTimer, ^{
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            NSArray *wins = [UIApplication.sharedApplication.windows copy];
+#pragma clang diagnostic pop
+            for (UIWindow *w in wins) {
+                if (w != gWin) {
+                    hideLocked(w);
+                    hideDecorativeViews(w);
+                }
+            }
+            NSArray *mikes = sortedMikes();
+            BOOL inRoom = mikes.count > 0;
+            gSWTBtn.hidden = !inRoom;
+            if (inRoom) {
+                [gPanel updateMikeCount:mikes.count];
+            } else if (wasInRoom) {
+                [gPanel autoStop];
+            }
+            wasInRoom = inRoom;
+        });
+        dispatch_resume(gRoomTimer);
+        swizzleHUDIfNeeded();
+        registerBroadcastListeners();
+    });
+}
+
+__attribute__((destructor))
+static void smith101_unload(void) {
+    if (gRoomTimer) dispatch_source_cancel(gRoomTimer);
+    stopAutoClick();
+    gWin = nil;
 }

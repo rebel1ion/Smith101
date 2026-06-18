@@ -605,11 +605,27 @@ static void     _broadcastStop(void);
 // ── C helpers ─────────────────────────────────────────────────────────────────
 static NSArray *_collectViews(UIView *root, Class cls) {
     NSMutableArray *out = [NSMutableArray array];
-    for (UIView *v in root.subviews) {
+    NSArray *subs = nil;
+    @try { subs = [root.subviews copy]; } @catch (NSException *e) { return out; }
+    for (UIView *v in subs) {
         if ([v isKindOfClass:cls]) [out addObject:v];
         [out addObjectsFromArray:_collectViews(v, cls)];
     }
     return out;
+}
+
+static void _hideDecorativeViews(UIWindow *win) {
+    static NSArray *clsNames = nil;
+    if (!clsNames) clsNames = @[@"YallaLite.LTGiftTrack",
+                                 @"YallaLite.LTBroadcastTrack",
+                                 @"YallaLite.LTXibImageView"];
+    for (NSString *name in clsNames) {
+        Class cls = NSClassFromString(name);
+        if (!cls) continue;
+        for (UIView *v in _collectViews(win, cls)) {
+            if (!v.hidden) v.hidden = YES;
+        }
+    }
 }
 
 static Class _findMikeClass(void) {
@@ -909,7 +925,10 @@ __attribute__((constructor)) static void _smith101_load(void) {
             NSArray *roomWindows = [UIApplication sharedApplication].windows;
 #pragma clang diagnostic pop
             for (UIWindow *w in roomWindows) {
-                if (w != _gWin) _hideLocked(w);
+                if (w != _gWin) {
+                    _hideLocked(w);
+                    _hideDecorativeViews(w);
+                }
             }
             NSArray *mikes = _sortedMikes();
             BOOL hasMikes = mikes.count > 0;

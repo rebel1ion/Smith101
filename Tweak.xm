@@ -898,7 +898,7 @@ __attribute__((constructor)) static void _smith101_load(void) {
         // Floating toggle button
         UIButton *swt = [UIButton buttonWithType:UIButtonTypeCustom];
         _gSWTBtn = swt;
-        swt.frame = CGRectMake(screen.size.width - 68, 0, 60, 28);
+        swt.frame = CGRectMake(screen.size.width - 68, 120, 60, 28);
         swt.backgroundColor = [UIColor colorWithRed:0.12 green:0.12 blue:0.18 alpha:0.9];
         swt.layer.cornerRadius = 14;
         swt.layer.masksToBounds = YES;

@@ -268,7 +268,7 @@ static void swizzleHUDIfNeeded(void) {
     SEL captured = sel;
     gOrigHUDShow = method_setImplementation(m, imp_implementationWithBlock(^(id hud, BOOL animated) {
         if (hudHasHideableText(hud)) return;
-        if (gOrigHUDShow) ((void(*)(id,SEL,BOOL))objc_msgSend)(hud, captured, animated);
+        if (gOrigHUDShow) ((void(*)(id,SEL,BOOL))gOrigHUDShow)(hud, captured, animated);
     }));
 }
 

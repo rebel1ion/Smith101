@@ -661,10 +661,16 @@ static void _tapView(UIView *view) {
     if (_tapControlInView(view)) return;
     for (UIGestureRecognizer *gr in view.gestureRecognizers) {
         if (![gr isKindOfClass:[UITapGestureRecognizer class]]) continue;
-        NSArray *targets = [gr valueForKey:@"_targets"];
+        NSArray *targets = nil;
+        @try { targets = [gr valueForKey:@"_targets"]; }
+        @catch (NSException *e) {}
         for (id tgtWrapper in targets) {
-            id target = [tgtWrapper valueForKey:@"_target"];
-            id actionStr = [tgtWrapper valueForKey:@"_action"];
+            id target = nil, actionStr = nil;
+            @try {
+                target = [tgtWrapper valueForKey:@"_target"];
+                actionStr = [tgtWrapper valueForKey:@"_action"];
+            }
+            @catch (NSException *e) {}
             SEL sel = [actionStr isKindOfClass:[NSString class]] ? NSSelectorFromString(actionStr) : NULL;
             if (target && sel && [target respondsToSelector:sel]) {
 #pragma clang diagnostic push

@@ -274,14 +274,16 @@ static void swizzleHUDIfNeeded(void) {
 
 // ─── Auto-clicker ────────────────────────────────────────────────────────
 
-static dispatch_source_t  gClickTimer;
-static dispatch_block_t   gAutoStopBlock = nil;
-static dispatch_queue_t   gClickQueue;
-static volatile int32_t   gClickCount   = 0;
-static volatile int32_t   gClickPending = 0;
-static BOOL               gClickRunning = NO;
-static NSInteger          gClickRate    = 500;
-static UIView * __weak    gTargetMike   = nil;
+static dispatch_source_t       gClickTimer;
+static dispatch_block_t        gAutoStopBlock = nil;
+static dispatch_queue_t        gClickQueue;
+static volatile int32_t        gClickCount   = 0;
+static volatile int32_t        gClickPending = 0;
+static BOOL                    gClickRunning = NO;
+static NSInteger               gClickRate    = 500;
+static UIView * __weak         gTargetMike   = nil;
+static NSInteger               gPendingRemoteStart = -1;
+static UIBackgroundTaskIdentifier gBGTask   = UIBackgroundTaskInvalid;
 
 static void stopAutoClick(void);
 
@@ -291,6 +293,12 @@ static void startAutoClick(NSInteger mikeIndex) {
     if (mikeIndex >= (NSInteger)mikes.count) return;
     gTargetMike   = mikes[mikeIndex];
     gClickRunning = YES;
+    if (gBGTask == UIBackgroundTaskInvalid) {
+        gBGTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+            [[UIApplication sharedApplication] endBackgroundTask:gBGTask];
+            gBGTask = UIBackgroundTaskInvalid;
+        }];
+    }
     if (!gClickQueue)
         gClickQueue = dispatch_queue_create(NULL, DISPATCH_QUEUE_SERIAL);
     gClickTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, gClickQueue);
@@ -323,6 +331,10 @@ static void stopAutoClick(void) {
     if (gClickTimer) {
         dispatch_source_cancel(gClickTimer);
         gClickTimer = nil;
+    }
+    if (gBGTask != UIBackgroundTaskInvalid) {
+        [[UIApplication sharedApplication] endBackgroundTask:gBGTask];
+        gBGTask = UIBackgroundTaskInvalid;
     }
 }
 
@@ -898,6 +910,7 @@ static void onRemoteStart(CFNotificationCenterRef c, void *o, CFStringRef name,
     NSString *n = (__bridge NSString *)name;
     NSInteger idx = [n.pathExtension integerValue];
     dispatch_async(dispatch_get_main_queue(), ^{
+        gPendingRemoteStart = idx;
         if (gPanel && !gClickRunning) [gPanel remoteStart:idx];
     });
 }
@@ -905,6 +918,7 @@ static void onRemoteStart(CFNotificationCenterRef c, void *o, CFStringRef name,
 static void onRemoteStop(CFNotificationCenterRef c, void *o, CFStringRef name,
                           const void *obj, CFDictionaryRef info) {
     dispatch_async(dispatch_get_main_queue(), ^{
+        gPendingRemoteStart = -1;
         if (gPanel) [gPanel remoteStop];
     });
 }
@@ -982,6 +996,11 @@ static void smith101_load(void) {
             gSWTBtn.hidden = !inRoom;
             if (inRoom) {
                 [gPanel updateMikeCount:mikes.count];
+                if (gPendingRemoteStart >= 0 && !gClickRunning) {
+                    NSInteger idx = gPendingRemoteStart;
+                    gPendingRemoteStart = -1;
+                    [gPanel remoteStart:idx];
+                }
             } else if (wasInRoom) {
                 [gPanel autoStop];
             }

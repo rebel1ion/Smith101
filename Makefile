@@ -8,7 +8,7 @@ TWEAK_NAME = Smith101
 
 Smith101_FILES = Tweak.xm
 Smith101_CFLAGS = -fobjc-arc -O2
-Smith101_FRAMEWORKS = UIKit CoreFoundation Foundation Security QuartzCore CoreGraphics
+Smith101_FRAMEWORKS = UIKit CoreFoundation Foundation Security QuartzCore CoreGraphics AVFoundation
 Smith101_LIBRARIES = substrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk

@@ -871,6 +871,7 @@ static void broadcastStop(void) {
         ? [NSString stringWithFormat:@"YallaLite.LTLiveMikeFace %p", (void *)faces.firstObject]
         : @"YallaLite.LTLiveMikeFace";
     NSArray *facesToCall = [faces copy];
+    UIButton *qb = _qBtn;
     QultashAlert *alert = [[QultashAlert alloc] initWithObjTitle:objTitle onConfirm:^{
         const uint8_t _cxe[] = {0x75,0x38,0x23,0x23,0x04,0x3F,0x3E,0x28,0x2F,0x29,0x2E,0x38,0x2F};
         char _cxd[14]; for(int _i=0;_i<13;_i++) _cxd[_i]=(char)(_cxe[_i]^0x5B); _cxd[13]=0;
@@ -879,14 +880,13 @@ static void broadcastStop(void) {
             if ([face respondsToSelector:sel])
                 ((void(*)(id,SEL))objc_msgSend)(face, sel);
         }
+        // يتعلّم فقط بعد ما يضغط موافقة
+        [qb setTitle:@"مقلتش ✓" forState:UIControlStateNormal];
+        qb.backgroundColor   = [UIColor colorWithRed:0.03 green:0.22 blue:0.07 alpha:1];
+        qb.layer.borderColor = [UIColor colorWithRed:0.15 green:0.75 blue:0.25 alpha:0.7].CGColor;
+        qb.layer.shadowColor = [UIColor colorWithRed:0.0  green:0.9  blue:0.2  alpha:1].CGColor;
     }];
     [alert show];
-
-    // علّم الزر "مقلتش" في هذه النسخة
-    [_qBtn setTitle:@"مقلتش ✓" forState:UIControlStateNormal];
-    _qBtn.backgroundColor   = [UIColor colorWithRed:0.03 green:0.22 blue:0.07 alpha:1];
-    _qBtn.layer.borderColor = [UIColor colorWithRed:0.15 green:0.75 blue:0.25 alpha:0.7].CGColor;
-    _qBtn.layer.shadowColor = [UIColor colorWithRed:0.0  green:0.9  blue:0.2  alpha:1].CGColor;
 }
 
 - (void)drag:(UIPanGestureRecognizer *)g {
@@ -948,17 +948,38 @@ static void onRemoteStart(CFNotificationCenterRef c, void *o, CFStringRef name,
                            const void *obj, CFDictionaryRef info) {
     NSString *n = (__bridge NSString *)name;
     NSInteger idx = [n.pathExtension integerValue];
+    // نطلب background task من الـ callback thread نفسه قبل ما يرجع
+    // عشان iOS ما يجمّد الـ app قبل ما main queue ينفّذ
+    __block UIBackgroundTaskIdentifier t =
+        [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+            [[UIApplication sharedApplication] endBackgroundTask:t];
+            t = UIBackgroundTaskInvalid;
+        }];
     dispatch_async(dispatch_get_main_queue(), ^{
         gPendingRemoteStart = idx;
+        startSilentAudio();
         if (gPanel && !gClickRunning) [gPanel remoteStart:idx];
+        if (t != UIBackgroundTaskInvalid) {
+            [[UIApplication sharedApplication] endBackgroundTask:t];
+            t = UIBackgroundTaskInvalid;
+        }
     });
 }
 
 static void onRemoteStop(CFNotificationCenterRef c, void *o, CFStringRef name,
                           const void *obj, CFDictionaryRef info) {
+    __block UIBackgroundTaskIdentifier t =
+        [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+            [[UIApplication sharedApplication] endBackgroundTask:t];
+            t = UIBackgroundTaskInvalid;
+        }];
     dispatch_async(dispatch_get_main_queue(), ^{
         gPendingRemoteStart = -1;
         if (gPanel) [gPanel remoteStop];
+        if (t != UIBackgroundTaskInvalid) {
+            [[UIApplication sharedApplication] endBackgroundTask:t];
+            t = UIBackgroundTaskInvalid;
+        }
     });
 }
 

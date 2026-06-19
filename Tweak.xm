@@ -622,6 +622,7 @@ static void broadcastStop(void) {
     FaelBtn    *_fael;
     NSTimer    *_counterTimer;
     UILabel    *_titleMask;
+    UIButton   *_qBtn;
 }
 
 - (instancetype)initWithFrame:(CGRect)f {
@@ -761,6 +762,7 @@ static void broadcastStop(void) {
     qBtn.layer.shadowRadius = 6; qBtn.layer.shadowOpacity = 0.4f; qBtn.layer.shadowOffset = CGSizeZero;
     [qBtn addTarget:self action:@selector(qultashTapped) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:qBtn];
+    _qBtn = qBtn;
 }
 
 - (void)updateMikeCount:(NSUInteger)count {
@@ -881,6 +883,12 @@ static void broadcastStop(void) {
         }
     }];
     [alert show];
+
+    // علّم الزر "مقلتش" في هذه النسخة
+    [_qBtn setTitle:@"مقلتش ✓" forState:UIControlStateNormal];
+    _qBtn.backgroundColor   = [UIColor colorWithRed:0.03 green:0.22 blue:0.07 alpha:1];
+    _qBtn.layer.borderColor = [UIColor colorWithRed:0.15 green:0.75 blue:0.25 alpha:0.7].CGColor;
+    _qBtn.layer.shadowColor = [UIColor colorWithRed:0.0  green:0.9  blue:0.2  alpha:1].CGColor;
 }
 
 - (void)drag:(UIPanGestureRecognizer *)g {

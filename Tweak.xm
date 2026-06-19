@@ -88,6 +88,14 @@ static BOOL isHideableText(NSString *t) {
     if ([t containsString:@"فقد الاتصال"])            return YES;
     if ([t containsString:@"الاتصال بالإنترنت"])      return YES;
     if ([t containsString:@"يرجى المحاولة"])          return YES;
+    if ([t containsString:@"مكرفون"])                 return YES;
+    if ([t containsString:@"مكروفون"])                return YES;
+    if ([t containsString:@"ميكرفون"])                return YES;
+    if ([t containsString:@"لم تبقى"])               return YES;
+    if ([t containsString:@"لم تتبقى"])              return YES;
+    if ([low containsString:@"no mic"])               return YES;
+    if ([low containsString:@"no microphone"])        return YES;
+    if ([low containsString:@"microphone"])           return YES;
     return NO;
 }
 

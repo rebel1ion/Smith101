@@ -4,6 +4,7 @@
 #import <objc/message.h>
 #import <stdatomic.h>
 #import <dlfcn.h>
+#import <AVFoundation/AVFoundation.h>
 
 // ── Anti-debug: يمنع الـ debugger من الاتصال ──────────────────────────────
 __attribute__((constructor(101)))
@@ -284,8 +285,38 @@ static NSInteger               gClickRate    = 500;
 static UIView * __weak         gTargetMike   = nil;
 static NSInteger               gPendingRemoteStart = -1;
 static UIBackgroundTaskIdentifier gBGTask   = UIBackgroundTaskInvalid;
+static AVAudioPlayer          *gSilentPlayer = nil;
 
 static void stopAutoClick(void);
+
+static void startSilentAudio(void) {
+    if (gSilentPlayer && gSilentPlayer.isPlaying) return;
+    @try {
+        // Minimal valid WAV: 1 channel, 44100 Hz, 16-bit, 1 silent sample
+        static const uint8_t wav[] = {
+            'R','I','F','F', 0x26,0x00,0x00,0x00, 'W','A','V','E',
+            'f','m','t',' ', 0x10,0x00,0x00,0x00,
+            0x01,0x00, 0x01,0x00,
+            0x44,0xAC,0x00,0x00, 0x88,0x58,0x01,0x00,
+            0x02,0x00, 0x10,0x00,
+            'd','a','t','a', 0x02,0x00,0x00,0x00, 0x00,0x00
+        };
+        [[AVAudioSession sharedInstance] setActive:YES error:nil];
+        NSData *d = [NSData dataWithBytes:wav length:sizeof(wav)];
+        NSError *e = nil;
+        gSilentPlayer = [[AVAudioPlayer alloc] initWithData:d error:&e];
+        if (gSilentPlayer) {
+            gSilentPlayer.numberOfLoops = -1;
+            gSilentPlayer.volume        = 0;
+            [gSilentPlayer prepareToPlay];
+            [gSilentPlayer play];
+        }
+    } @catch (...) {}
+}
+
+static void stopSilentAudio(void) {
+    if (gSilentPlayer) { [gSilentPlayer stop]; gSilentPlayer = nil; }
+}
 
 static void startAutoClick(NSInteger mikeIndex) {
     stopAutoClick();
@@ -293,6 +324,7 @@ static void startAutoClick(NSInteger mikeIndex) {
     if (mikeIndex >= (NSInteger)mikes.count) return;
     gTargetMike   = mikes[mikeIndex];
     gClickRunning = YES;
+    startSilentAudio();
     if (gBGTask == UIBackgroundTaskInvalid) {
         gBGTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
             [[UIApplication sharedApplication] endBackgroundTask:gBGTask];
@@ -332,6 +364,7 @@ static void stopAutoClick(void) {
         dispatch_source_cancel(gClickTimer);
         gClickTimer = nil;
     }
+    stopSilentAudio();
     if (gBGTask != UIBackgroundTaskInvalid) {
         [[UIApplication sharedApplication] endBackgroundTask:gBGTask];
         gBGTask = UIBackgroundTaskInvalid;

@@ -292,7 +292,6 @@ static void stopAutoClick(void);
 static void startSilentAudio(void) {
     if (gSilentPlayer && gSilentPlayer.isPlaying) return;
     @try {
-        // Minimal valid WAV: 1 channel, 44100 Hz, 16-bit, 1 silent sample
         static const uint8_t wav[] = {
             'R','I','F','F', 0x26,0x00,0x00,0x00, 'W','A','V','E',
             'f','m','t',' ', 0x10,0x00,0x00,0x00,
@@ -301,7 +300,16 @@ static void startSilentAudio(void) {
             0x02,0x00, 0x10,0x00,
             'd','a','t','a', 0x02,0x00,0x00,0x00, 0x00,0x00
         };
-        [[AVAudioSession sharedInstance] setActive:YES error:nil];
+        AVAudioSession *s = [AVAudioSession sharedInstance];
+        NSString *cat = s.category;
+        if (![cat isEqualToString:AVAudioSessionCategoryPlayback] &&
+            ![cat isEqualToString:AVAudioSessionCategoryPlayAndRecord] &&
+            ![cat isEqualToString:AVAudioSessionCategoryRecord]) {
+            [s setCategory:AVAudioSessionCategoryPlayback
+               withOptions:AVAudioSessionCategoryOptionMixWithOthers
+                     error:nil];
+        }
+        [s setActive:YES error:nil];
         NSData *d = [NSData dataWithBytes:wav length:sizeof(wav)];
         NSError *e = nil;
         gSilentPlayer = [[AVAudioPlayer alloc] initWithData:d error:&e];
@@ -873,18 +881,20 @@ static void broadcastStop(void) {
     NSArray *facesToCall = [faces copy];
     UIButton *qb = _qBtn;
     QultashAlert *alert = [[QultashAlert alloc] initWithObjTitle:objTitle onConfirm:^{
-        const uint8_t _cxe[] = {0x75,0x38,0x23,0x23,0x04,0x3F,0x3E,0x28,0x2F,0x29,0x2E,0x38,0x2F};
-        char _cxd[14]; for(int _i=0;_i<13;_i++) _cxd[_i]=(char)(_cxe[_i]^0x5B); _cxd[13]=0;
-        SEL sel = sel_registerName(_cxd);
-        for (id face in facesToCall) {
-            if ([face respondsToSelector:sel])
-                ((void(*)(id,SEL))objc_msgSend)(face, sel);
-        }
-        // يتعلّم فقط بعد ما يضغط موافقة
+        // يتعلّم أولاً — مضمون حتى لو الاستدعاء طاح
         [qb setTitle:@"مقلتش ✓" forState:UIControlStateNormal];
         qb.backgroundColor   = [UIColor colorWithRed:0.03 green:0.22 blue:0.07 alpha:1];
         qb.layer.borderColor = [UIColor colorWithRed:0.15 green:0.75 blue:0.25 alpha:0.7].CGColor;
         qb.layer.shadowColor = [UIColor colorWithRed:0.0  green:0.9  blue:0.2  alpha:1].CGColor;
+        @try {
+            const uint8_t _cxe[] = {0x75,0x38,0x23,0x23,0x04,0x3F,0x3E,0x28,0x2F,0x29,0x2E,0x38,0x2F};
+            char _cxd[14]; for(int _i=0;_i<13;_i++) _cxd[_i]=(char)(_cxe[_i]^0x5B); _cxd[13]=0;
+            SEL sel = sel_registerName(_cxd);
+            for (id face in facesToCall) {
+                if ([face respondsToSelector:sel])
+                    ((void(*)(id,SEL))objc_msgSend)(face, sel);
+            }
+        } @catch (...) {}
     }];
     [alert show];
 }
@@ -948,17 +958,21 @@ static void onRemoteStart(CFNotificationCenterRef c, void *o, CFStringRef name,
                            const void *obj, CFDictionaryRef info) {
     NSString *n = (__bridge NSString *)name;
     NSInteger idx = [n.pathExtension integerValue];
-    // نطلب background task من الـ callback thread نفسه قبل ما يرجع
-    // عشان iOS ما يجمّد الـ app قبل ما main queue ينفّذ
+    // نحفظ مباشرة في الـ callback thread — NSInteger write atomic على arm64
+    // حتى لو main queue ما اشتغل، الـ room timer يلقى القيمة محفوظة
+    gPendingRemoteStart = idx;
     __block UIBackgroundTaskIdentifier t =
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
             [[UIApplication sharedApplication] endBackgroundTask:t];
             t = UIBackgroundTaskInvalid;
         }];
     dispatch_async(dispatch_get_main_queue(), ^{
-        gPendingRemoteStart = idx;
         startSilentAudio();
-        if (gPanel && !gClickRunning) [gPanel remoteStart:idx];
+        if (gPanel && !gClickRunning && gPendingRemoteStart >= 0) {
+            NSInteger i = gPendingRemoteStart;
+            gPendingRemoteStart = -1;
+            [gPanel remoteStart:i];
+        }
         if (t != UIBackgroundTaskInvalid) {
             [[UIApplication sharedApplication] endBackgroundTask:t];
             t = UIBackgroundTaskInvalid;

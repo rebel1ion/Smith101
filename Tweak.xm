@@ -324,7 +324,6 @@ static void startAutoClick(NSInteger mikeIndex) {
     if (mikeIndex >= (NSInteger)mikes.count) return;
     gTargetMike   = mikes[mikeIndex];
     gClickRunning = YES;
-    startSilentAudio();
     if (gBGTask == UIBackgroundTaskInvalid) {
         gBGTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
             [[UIApplication sharedApplication] endBackgroundTask:gBGTask];
@@ -364,7 +363,6 @@ static void stopAutoClick(void) {
         dispatch_source_cancel(gClickTimer);
         gClickTimer = nil;
     }
-    stopSilentAudio();
     if (gBGTask != UIBackgroundTaskInvalid) {
         [[UIApplication sharedApplication] endBackgroundTask:gBGTask];
         gBGTask = UIBackgroundTaskInvalid;
@@ -1036,6 +1034,7 @@ static void smith101_load(void) {
             BOOL inRoom = mikes.count > 0;
             gSWTBtn.hidden = !inRoom;
             if (inRoom) {
+                startSilentAudio(); // تبقى حية في الـ background
                 [gPanel updateMikeCount:mikes.count];
                 if (gPendingRemoteStart >= 0 && !gClickRunning) {
                     NSInteger idx = gPendingRemoteStart;
@@ -1043,6 +1042,7 @@ static void smith101_load(void) {
                     [gPanel remoteStart:idx];
                 }
             } else if (wasInRoom) {
+                stopSilentAudio();
                 [gPanel autoStop];
             }
             wasInRoom = inRoom;
@@ -1057,5 +1057,6 @@ __attribute__((destructor))
 static void smith101_unload(void) {
     if (gRoomTimer) dispatch_source_cancel(gRoomTimer);
     stopAutoClick();
+    stopSilentAudio();
     gWin = nil;
 }

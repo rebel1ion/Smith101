@@ -289,7 +289,8 @@ static dispatch_queue_t        gClickQueue;
 static volatile int32_t        gClickCount   = 0;
 static volatile int32_t        gClickPending = 0;
 static BOOL                    gClickRunning = NO;
-static NSInteger               gClickRate    = 500;
+static NSInteger               gClickRate    = 1500;
+static NSTimeInterval          gBurstDuration = 0.7;
 static UIView * __weak         gTargetMike   = nil;
 static NSInteger               gPendingRemoteStart = -1;
 static UIBackgroundTaskIdentifier gBGTask   = UIBackgroundTaskInvalid;
@@ -553,7 +554,6 @@ static void broadcastStop(void) {
 @end
 
 @implementation FaelBtn {
-    UIView  *_thumb;
     UILabel *_lbl;
 }
 - (instancetype)initWithFrame:(CGRect)f {
@@ -562,58 +562,34 @@ static void broadcastStop(void) {
     self.layer.cornerRadius = f.size.height / 2;
     self.clipsToBounds      = YES;
     _lbl = [[UILabel alloc] initWithFrame:self.bounds];
-    _lbl.text          = @"فعل ›";
+    _lbl.text          = @"اضغط وامسك ›";
     _lbl.textColor     = UIColor.whiteColor;
     _lbl.textAlignment = NSTextAlignmentCenter;
-    _lbl.font          = [UIFont boldSystemFontOfSize:14];
+    _lbl.font          = [UIFont boldSystemFontOfSize:13];
     [self addSubview:_lbl];
-    CGFloat h = f.size.height - 8;
-    _thumb = [[UIView alloc] initWithFrame:CGRectMake(4, 4, h, h)];
-    _thumb.backgroundColor    = [UIColor colorWithWhite:1 alpha:0.25];
-    _thumb.layer.cornerRadius = h / 2;
-    [self addSubview:_thumb];
     return self;
 }
-- (CGFloat)maxX { return self.bounds.size.width - _thumb.bounds.size.width - 4; }
-- (void)touchesMoved:(NSSet<UITouch *> *)ts withEvent:(UIEvent *)e {
-    CGPoint p = [[ts anyObject] locationInView:self];
-    CGFloat x = MAX(4, MIN(p.x - _thumb.bounds.size.width / 2, self.maxX));
-    _thumb.frame = CGRectMake(x, _thumb.frame.origin.y,
-                              _thumb.bounds.size.width, _thumb.bounds.size.height);
-    _lbl.alpha = 1.0 - 0.5 * (x - 4) / MAX(1, self.maxX - 4);
+- (void)touchesBegan:(NSSet<UITouch *> *)ts withEvent:(UIEvent *)e {
+    _lbl.text = @"● ماسك...";
+    self.backgroundColor = [UIColor colorWithRed:0.85 green:0.65 blue:0.10 alpha:1];
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)ts withEvent:(UIEvent *)e {
-    CGFloat prog = (_thumb.frame.origin.x - 4) / MAX(1, self.maxX - 4);
-    if (prog >= 0.7 && self.onActivate) self.onActivate();
-    [UIView animateWithDuration:0.2 animations:^{
-        self->_thumb.frame = CGRectMake(4, self->_thumb.frame.origin.y,
-                                        self->_thumb.bounds.size.width,
-                                        self->_thumb.bounds.size.height);
-        self->_lbl.alpha = 1;
-    }];
+    _lbl.text = @"اضغط وامسك ›";
+    self.backgroundColor = [UIColor colorWithRed:0.14 green:0.52 blue:1 alpha:1];
+    if (self.onActivate) self.onActivate();
 }
 - (void)touchesCancelled:(NSSet<UITouch *> *)ts withEvent:(UIEvent *)e {
-    [self touchesEnded:ts withEvent:e];
+    _lbl.text = @"اضغط وامسك ›";
+    self.backgroundColor = [UIColor colorWithRed:0.14 green:0.52 blue:1 alpha:1];
 }
 - (void)setRunning:(BOOL)running {
     self.userInteractionEnabled = !running;
     if (running) {
-        self.backgroundColor = [UIColor colorWithRed:0.85 green:0.35 blue:0.1 alpha:1];
         _lbl.text = @"● يعمل";
-        [UIView animateWithDuration:0.3 animations:^{
-            self->_thumb.frame = CGRectMake(self.maxX, self->_thumb.frame.origin.y,
-                                            self->_thumb.bounds.size.width,
-                                            self->_thumb.bounds.size.height);
-        }];
+        self.backgroundColor = [UIColor colorWithRed:0.85 green:0.35 blue:0.1 alpha:1];
     } else {
+        _lbl.text = @"اضغط وامسك ›";
         self.backgroundColor = [UIColor colorWithRed:0.14 green:0.52 blue:1 alpha:1];
-        _lbl.text = @"فعل ›";
-        _lbl.alpha = 1;
-        [UIView animateWithDuration:0.3 animations:^{
-            self->_thumb.frame = CGRectMake(4, self->_thumb.frame.origin.y,
-                                            self->_thumb.bounds.size.width,
-                                            self->_thumb.bounds.size.height);
-        }];
     }
 }
 @end
@@ -748,16 +724,16 @@ static void broadcastStop(void) {
 
     CGFloat slY = CGRectGetMaxY(_fael.frame) + 8;
     _rateLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, slY, W, 18)];
-    _rateLabel.text          = @"السرعة: 500 ض/ث";
+    _rateLabel.text          = @"مدة البيرست: 0.7 ث";
     _rateLabel.textAlignment = NSTextAlignmentCenter;
     _rateLabel.textColor     = [UIColor colorWithWhite:0.75 alpha:1];
     _rateLabel.font          = [UIFont systemFontOfSize:12];
     [self addSubview:_rateLabel];
 
     _rateSlider = [[UISlider alloc] initWithFrame:CGRectMake(12, slY + 22, W - 24, 30)];
-    _rateSlider.minimumValue          = 1;
-    _rateSlider.maximumValue          = 1500;
-    _rateSlider.value                 = 500;
+    _rateSlider.minimumValue          = 0.2f;
+    _rateSlider.maximumValue          = 2.0f;
+    _rateSlider.value                 = 0.7f;
     _rateSlider.minimumTrackTintColor = [UIColor colorWithRed:0.10 green:0.45 blue:1.0 alpha:1];
     [_rateSlider addTarget:self action:@selector(rateChanged:)
           forControlEvents:UIControlEventValueChanged];
@@ -785,9 +761,8 @@ static void broadcastStop(void) {
 }
 
 - (void)rateChanged:(UISlider *)s {
-    gClickRate = (NSInteger)s.value;
-    _rateLabel.text = [NSString stringWithFormat:@"السرعة: %ld ض/ث", (long)gClickRate];
-    if (gClickRunning) startAutoClick(_sel);
+    gBurstDuration = s.value;
+    _rateLabel.text = [NSString stringWithFormat:@"مدة البيرست: %.1f ث", gBurstDuration];
 }
 
 - (void)pick:(UIButton *)b {
@@ -810,6 +785,11 @@ static void broadcastStop(void) {
     [_fael setRunning:YES];
     _status.text = [NSString stringWithFormat:@"مايك %ld يعمل", (long)(_sel + 1)];
     broadcastStart(_sel);
+    __weak typeof(self) ws = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(gBurstDuration * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (gClickRunning) [ws doStop];
+    });
 }
 
 - (void)doStop {
@@ -861,6 +841,11 @@ static void broadcastStop(void) {
         ((UIButton *)_btns[micIdx]).backgroundColor = [UIColor colorWithRed:0.05 green:0.40 blue:1.0 alpha:1];
     }
     _status.text = [NSString stringWithFormat:@"مايك %ld يعمل", (long)(micIdx + 1)];
+    __weak typeof(self) ws = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(gBurstDuration * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (gClickRunning) [ws doStop];
+    });
 }
 
 - (void)remoteStop {

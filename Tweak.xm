@@ -966,15 +966,19 @@ static void onRemoteStart(CFNotificationCenterRef c, void *o, CFStringRef name,
                            const void *obj, CFDictionaryRef info) {
     NSString *n = (__bridge NSString *)name;
     NSInteger idx = [n.pathExtension integerValue];
-    // نحفظ مباشرة في الـ callback thread — NSInteger write atomic على arm64
-    // حتى لو main queue ما اشتغل، الـ room timer يلقى القيمة محفوظة
     gPendingRemoteStart = idx;
+    // تأخير متدرج: كل نسخة تأخذ وقتها بناءً على PID حقها
+    // أصغر PID % 50 = 150ms (النسخة الثانية)، الباقين يتتالون كل 1ms
+    // النتيجة: master→ t=0 | ثاني→ 150ms | ثالث→ 165ms | رابع→ 180ms...
+    pid_t pid = getpid();
+    NSTimeInterval stagger = 0.15 + (pid % 50) * 0.001;
     __block UIBackgroundTaskIdentifier t =
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
             [[UIApplication sharedApplication] endBackgroundTask:t];
             t = UIBackgroundTaskInvalid;
         }];
-    dispatch_async(dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(stagger * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
         startSilentAudio();
         if (gPanel && !gClickRunning && gPendingRemoteStart >= 0) {
             NSInteger i = gPendingRemoteStart;

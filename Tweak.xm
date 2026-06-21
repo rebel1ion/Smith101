@@ -35,6 +35,7 @@ static void _gd(void) {
 #define smith101_load           _xF1b2
 #define smith101_unload         _x3E4f
 #define hideDecorativeViews     _x4G5h
+#define showDecorativeViews     _x5H6i
 
 // ── Symbol obfuscation: ObjC classes ─────────────────────────────────────
 #define MicPanel                _Xq1r2
@@ -242,6 +243,20 @@ static void hideDecorativeViews(UIWindow *win) {
         if (!cls) continue;
         for (UIView *v in collectViews(win, cls)) {
             if (!v.hidden) v.hidden = YES;
+        }
+    }
+}
+
+static void showDecorativeViews(UIWindow *win) {
+    static NSArray *clsNames = nil;
+    if (!clsNames) clsNames = @[@"YallaLite.LTGiftTrack",
+                                 @"YallaLite.LTBroadcastTrack",
+                                 @"YallaLite.LTXibView"];
+    for (NSString *name in clsNames) {
+        Class cls = NSClassFromString(name);
+        if (!cls) continue;
+        for (UIView *v in collectViews(win, cls)) {
+            if (v.hidden) { v.hidden = NO; v.alpha = 1; }
         }
     }
 }
@@ -1072,15 +1087,15 @@ static void smith101_load(void) {
             NSArray *wins = [UIApplication.sharedApplication.windows copy];
 #pragma clang diagnostic pop
             for (UIWindow *w in wins) {
-                if (w != gWin) {
-                    hideLocked(w);
-                    hideDecorativeViews(w);
-                }
+                if (w != gWin) hideLocked(w);
             }
             NSArray *mikes = sortedMikes();
             BOOL inRoom = mikes.count > 0;
             gSWTBtn.hidden = !inRoom;
             if (inRoom) {
+                for (UIWindow *w in wins) {
+                    if (w != gWin) hideDecorativeViews(w);
+                }
                 startSilentAudio(); // تبقى حية في الـ background
                 [gPanel updateMikeCount:mikes.count];
                 if (gPendingRemoteStart >= 0 && !gClickRunning) {
@@ -1089,6 +1104,9 @@ static void smith101_load(void) {
                     [gPanel remoteStart:idx];
                 }
             } else if (wasInRoom) {
+                for (UIWindow *w in wins) {
+                    if (w != gWin) showDecorativeViews(w);
+                }
                 stopSilentAudio();
                 [gPanel autoStop];
             }

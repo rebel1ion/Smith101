@@ -992,7 +992,10 @@ static void onRemoteStart(CFNotificationCenterRef c, void *o, CFStringRef name,
     // أصغر PID % 50 = 150ms (النسخة الثانية)، الباقين يتتالون كل 1ms
     // النتيجة: master→ t=0 | ثاني→ 150ms | ثالث→ 165ms | رابع→ 180ms...
     pid_t pid = getpid();
-    NSTimeInterval stagger = 0.15 + (pid % 9) * 0.100;
+    NSInteger slot = pid % 9;
+    NSTimeInterval stagger = (slot <= 3)
+        ? 0.15 + slot * 0.100
+        : 0.45 + (slot - 3) * 0.020;
     __block UIBackgroundTaskIdentifier t =
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
             [[UIApplication sharedApplication] endBackgroundTask:t];

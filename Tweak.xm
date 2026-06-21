@@ -139,31 +139,37 @@ static NSArray *collectViews(UIView *root, Class cls) {
 }
 
 static NSArray *sortedMikes(void) {
-    Class cls = NSClassFromString(@"YallaLite.LTMikeElement")
-             ?: NSClassFromString(@"LTMikeElement")
-             ?: NSClassFromString(@"YallaLite_LTMikeElement")
-             ?: NSClassFromString(@"YallaLite.LTLiveMikeFace")
-             ?: NSClassFromString(@"LTLiveMikeFace");
+    static Class cls = Nil;
     if (!cls) {
-        // Dynamic search in main bundle
-        unsigned int count = 0;
-        const char *img = [[[NSBundle mainBundle] executablePath] UTF8String];
-        const char **names = objc_copyClassNamesForImage(img, &count);
-        if (names) {
-            for (unsigned int pass = 0; pass < 2 && !cls; pass++) {
-                for (unsigned int i = 0; i < count; i++) {
-                    NSString *n = @(names[i]);
-                    NSString *lower = n.lowercaseString;
-                    BOOL match = pass == 0
-                        ? ([lower containsString:@"mike"] && [lower containsString:@"element"])
-                        : [lower containsString:@"mike"];
-                    if (match) {
-                        Class c = NSClassFromString(n);
-                        if (c && [c isSubclassOfClass:[UIView class]]) { cls = c; break; }
+        static CFTimeInterval lastSearch = 0;
+        CFTimeInterval now = CACurrentMediaTime();
+        if (now - lastSearch < 30.0) return @[];
+        lastSearch = now;
+        cls = NSClassFromString(@"YallaLite.LTMikeElement")
+           ?: NSClassFromString(@"LTMikeElement")
+           ?: NSClassFromString(@"YallaLite_LTMikeElement")
+           ?: NSClassFromString(@"YallaLite.LTLiveMikeFace")
+           ?: NSClassFromString(@"LTLiveMikeFace");
+        if (!cls) {
+            unsigned int count = 0;
+            const char *img = [[[NSBundle mainBundle] executablePath] UTF8String];
+            const char **names = objc_copyClassNamesForImage(img, &count);
+            if (names) {
+                for (unsigned int pass = 0; pass < 2 && !cls; pass++) {
+                    for (unsigned int i = 0; i < count; i++) {
+                        NSString *n = @(names[i]);
+                        NSString *lower = n.lowercaseString;
+                        BOOL match = pass == 0
+                            ? ([lower containsString:@"mike"] && [lower containsString:@"element"])
+                            : [lower containsString:@"mike"];
+                        if (match) {
+                            Class c = NSClassFromString(n);
+                            if (c && [c isSubclassOfClass:[UIView class]]) { cls = c; break; }
+                        }
                     }
                 }
+                free((void*)names);
             }
-            free((void*)names);
         }
     }
     if (!cls) return @[];
@@ -1079,22 +1085,24 @@ static void smith101_load(void) {
         gRoomTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
                                             dispatch_get_main_queue());
         dispatch_source_set_timer(gRoomTimer, DISPATCH_TIME_NOW,
-                                  (uint64_t)(0.2 * NSEC_PER_SEC), 0);
+                                  (uint64_t)(1.0 * NSEC_PER_SEC), 0);
         __block BOOL wasInRoom = NO;
         dispatch_source_set_event_handler(gRoomTimer, ^{
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
             NSArray *wins = [UIApplication.sharedApplication.windows copy];
 #pragma clang diagnostic pop
-            for (UIWindow *w in wins) {
-                if (w != gWin) hideLocked(w);
-            }
             NSArray *mikes = sortedMikes();
             BOOL inRoom = mikes.count > 0;
             gSWTBtn.hidden = !inRoom;
             if (inRoom) {
                 for (UIWindow *w in wins) {
-                    if (w != gWin) hideDecorativeViews(w);
+                    if (w != gWin) hideLocked(w);
+                }
+                if (!wasInRoom) {
+                    for (UIWindow *w in wins) {
+                        if (w != gWin) hideDecorativeViews(w);
+                    }
                 }
                 startSilentAudio(); // تبقى حية في الـ background
                 [gPanel updateMikeCount:mikes.count];
